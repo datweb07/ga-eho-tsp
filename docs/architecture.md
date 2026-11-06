@@ -1,12 +1,15 @@
 # Hợp đồng GA–EHO và kiến trúc bàn giao
 
-Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. **EHOConfig chỉ là schema; chưa có EHO solver hoặc GUI.**
+Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. **EHOConfig chỉ là schema; chưa có EHO solver. GUI GA hiện có, xem [hướng dẫn](gui_guide.md).**
 
 ## Luồng dữ liệu
 
 ```mermaid
 flowchart LR
     CLI[CLI / notebook] --> Loader[data.matrix_loader]
+    GUI[GUI Tkinter] --> Controller[Worker / queue / dispatcher]
+    GUI --> Loader
+    Controller --> Solver
     Loader --> Problem[domain.TSPProblem]
     CLI --> Solver[algorithms.ga.solve]
     Solver --> Problem

@@ -1,6 +1,7 @@
 # Chạy từ thư mục gốc repository; GA core dùng Python stdlib.
 -e .
 matplotlib>=3.8,<4
+# GUI dùng tkinter + ttk đi kèm Python Windows; không cài tkinter từ pip.
 notebook>=7,<8
 ipykernel>=6.29,<8
 nbclient>=0.10,<1
