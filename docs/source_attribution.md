@@ -6,7 +6,7 @@ GA chính thức trong src/ga_eho_tsp được viết lại từ thiết kế pe
 
 Ba notebook hiện tại được viết mới theo các chủ đề tham chiếu: operators/sensitivity, distribution/stability, challenging cases. Bản gốc37/20/43cells có API/import cũ và notebook4 có vòng chạy tới target; không sao chép code/kết luận/ảnh cũ làm kết quả mới. Notebook mới17/13/13cells dùng public package, seed/budget hữu hạn, bảng/plot chạy thật và best-observed thay cho optimum chưa biết.
 
-7matrix ở data/legacy giữ nguyên byte; SHA256 ở [data README](../data/README.md). Nguồn dataset gốc, cách ánh xạ từng file và optimum chưa đối chiếu đầy đủ; hậu tố tên chỉ là hint. Hai instance nhỏ3/6city được enumeration kiểm chứng offline trong notebook3, không biến thành solver thứ ba hoặc bằng chứng optimum cho bài khác. Registry known_optimum vẫn None.
+7matrix được đặt trực tiếp ở data/ và giữ nguyên byte khi chuyển khỏi thư mục legacy. SHA256 từng file vẫn có trong snapshot_manifest.json của bản backup bên dưới. Nguồn dataset gốc, cách ánh xạ từng file và optimum chưa đối chiếu đầy đủ; hậu tố tên chỉ là hint. Hai instance nhỏ3/6city được enumeration kiểm chứng offline trong notebook3, không biến thành solver thứ ba hoặc bằng chứng optimum cho bài khác. Registry known_optimum vẫn None.
 
 ## Backup ngoài repository
 
