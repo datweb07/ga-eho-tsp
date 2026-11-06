@@ -1,0 +1,53 @@
+{
+  "algorithm": "ga",
+  "problem_name": "15Cities-1194",
+  "best_route": [
+    0,
+    1,
+    14,
+    13,
+    12,
+    11,
+    10,
+    9,
+    7,
+    6,
+    5,
+    8,
+    4,
+    3,
+    2
+  ],
+  "best_distance": 1225.0,
+  "iterations_completed": 250,
+  "evaluations": 19580,
+  "elapsed_seconds": 0.23540379999030847,
+  "seed": 42,
+  "config_snapshot": {
+    "seed": 42,
+    "max_iterations": 250,
+    "max_evaluations": null,
+    "time_limit_seconds": null,
+    "record_history_every": 1,
+    "population_size": 80,
+    "generations": 250,
+    "selection_method": "tournament",
+    "tournament_size": 3,
+    "crossover_method": "ox",
+    "crossover_rate": 0.9,
+    "mutation_method": "inversion",
+    "mutation_rate": 0.15,
+    "elite_count": 2,
+    "initialization_method": "random",
+    "local_search_enabled": false,
+    "local_search_max_moves": 0
+  },
+  "stopping_reason": "MAX_ITERATIONS",
+  "is_valid": true,
+  "metadata": {
+    "partial_iteration": false,
+    "version": "0.1.0",
+    "dataset_sha256": "deb32a09413ec1a2d7f94fa9c71d077df2f6a924e97b6082557e435733808b31",
+    "initialization_atomic": true
+  }
+}
