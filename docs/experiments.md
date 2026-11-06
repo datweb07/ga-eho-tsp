@@ -1,75 +1,109 @@
-# Kiểm thử và số liệu thực — GA P0
+# Nghiệm thu GA và ba notebook bàn giao — 06/11/2026
 
-Ngày thực hiện: 05/11/2026. Python 3.11.9, Windows-10-10.0.26300-SP0, package 0.1.0. HEAD lúc đo `5d81c76a315cdb7e7753d65aa9b68e503f42d795`, working tree dirty: code mới chưa commit. SHA256 từng file package đã đo ở `experiments/reports/implementation_sha256.json`; checksum dataset nằm trong raw CSV và data/README.md. Không có EHO solver hoặc benchmark EHO.
+Phạm vi: final cleanup/review GA0.2.0, không thêm thuật toán hoặc đổi shared contract, không triển khai EHO/GUI. Nguồn code là working tree có thay đổi chưa commit trên main, HEAD `e6dfb233a0f5dbe55a17e8b9c8812ee602d63d20`. Tất cả số dưới là kết quả chạy thực; thời gian phụ thuộc máy, không phải cam kết hiệu năng.
 
-## Lệnh thực sự đã chạy
+## Environment và trước cleanup
 
-Các lệnh `python` bên dưới được thực thi bằng `.venv/Scripts/python.exe` trong repo này.
+Python3.11.9, Windows10 build26300. `python -m pytest -q` trước xóa: **166 passed in1.22s,0failed,0skipped**; log và source suite đã backup ngoài repo. Không dùng việc xóa tests để báo xanh. Snapshot467file đã test ZIP/SHA256, gồm working tree/untracked/config/results và notebook original; vị trí ở [source_attribution.md](source_attribution.md).
 
-| Lệnh | Kết quả thực |
-|---|---|
-| `python --version`; `python -m pip list` | Python 3.11.9; xác định dependency legacy, chưa có pytest lúc bắt đầu |
-| `python -m pip install -e '.[dev]' --no-build-isolation` | FAIL: môi trường ban đầu thiếu bdist_wheel |
-| `python -m pip install -e '.[dev]'` trong sandbox | FAIL: getaddrinfo/PyPI không truy cập được |
-| Cùng lệnh cài đặt sau cấp quyền network | PASS: editable package + pytest 8.3.5 và dependencies được cài |
-| `python -m pytest -q` lần đầu | 98 passed in 0.80s |
-| Sau thêm edge cases/evaluation/cancel/failure logs | 104 passed in 0.82s |
-| `python -m pytest -q` cuối cùng | **105 passed in 0.78s**, 0 fail, 0 skip; log `experiments/reports/pytest.txt` |
-| `python -m compileall -q src/ga_eho_tsp` | PASS tại bước 104 tests |
-| `python -m pip check` | No broken requirements found |
-| `python -m ga_eho_tsp.cli validate --dataset data/legacy/06Cities-1248.txt` | PASS: dimension=6, symmetric=True, diagonal=0, finite=True |
-| `python -m ga_eho_tsp.cli solve --algorithm ga --dataset data/legacy/15Cities-1194.txt --seed 42 --json outputs/runs/ga-15-42.json` | PASS: kết quả bên dưới |
-| `python -m ga_eho_tsp.cli benchmark --config experiments/configs/baseline.json` | PASS: 35 run, 0 failed, tất cả route/cost kiểm tra độc lập hợp lệ |
-| `python experiments/scripts/audit_legacy.py` | PASS: tái hiện các lỗi legacy, lưu JSON; cần extra legacy |
-| `python -m cProfile -o outputs/ga-48.prof -m ga_eho_tsp.cli solve --dataset data/legacy/48Cities-33523.txt --seed 42` | PASS: distance=38410, 19580 evaluations; profile có overhead |
-| `python experiments/scripts/summarize_ga.py` | PASS: kiểm tra checksum 7 matrix, 35 raw rows valid; sinh bảng/manifest, giữ report nhỏ |
+Đã chạy166regression tests trước khi xóa tests theo chỉ thị leader, nên repo cuối không còn automated pytest regression suite; việc này là một thay đổi có chủ đích và là rủi ro khi phát triển EHO. GUIDELINES giữ nguyên dù cây đích từng yêu cầu tests; các assertions trong notebook/QA release không thay thế suite regression lâu dài. Team nên thống nhất khôi phục tests khi bắt đầu EHO.
 
-Baseline chạy trước archive (import fail, benchmark cũ, headless visualization) đã ghi riêng ở audit_legacy.md. Không chạy GUI tương tác, không thực thi notebook end-to-end, không chạy EHO. Test failure logging dùng lỗi được tiêm **chỉ trong test** để chứng minh không bỏ run lỗi; benchmark 35 run thực không có lỗi tiêm.
+`python -m pip install -r requirements.txt` đã thành công ở `.venv` dự án và một **venv sạch độc lập** ở Temp đường dẫn ngắn. Cả hai `pip check` pass. Phiên bản đã dùng: Matplotlib3.11.2, Notebook7.6.4, ipykernel7.4.0, nbclient0.11.0, nbformat5.11.1. NumPy2.4.6 là dependency của Matplotlib, notebook không import trực tiếp. Venv QA đầu tiên đặt trong đường dẫn quá dài bị OSError khi giải nén JupyterLab; tạo lại tại Temp ngắn đã cài xong và chạy đủ notebook. Run All ban đầu trong sandbox không hoàn tất và đã được dừng; chạy lại với quyền khởi tạo kernel/kết nối local thành công. Bảng dưới chỉ ghi các lần Run All hoàn tất, headless.
 
-## Phạm vi tests
+## Thiết kế ba notebook mới
 
-- Domain: objective/cạnh cuối/đảo route/không sửa input, n nhỏ, jagged/non-numeric/negative/NaN/inf/asymmetric/nonzero diagonal, bool/float city/sai start/closed/duplicate/missing route, floating tolerance và integer symmetry chính xác, off-diagonal zero, loader lỗi.
-- 7 dataset: dimension 3/4/6/15/26/42/48 và sample cost/checksum metadata. Exhaustive enumeration của 2!/3!/5! tail permutations xác nhận optimum 6/189/1248 cho ba bài nhỏ; không hard-code route trong solver.
-- GA operators: nhiều seed trên 3/4/6/15/26/42/48, parent bất biến, OX ví dụ cụ thể, inversion n=3, rates 0/1, selection ties/minimization, elites không sửa score/chọn lặp index 0.
-- Solver: population lẻ P=9, chính xác số evaluations, global best khi final population xấu hơn (controlled test), history monotonic, RNG global không đổi, reproducibility bỏ qua elapsed, cancel trước/sau callback/giữa generation, partial budget chính xác, time limit, max_iterations, zero-cost mọi selection×mutation.
-- Integration: CLI subprocess headless, JSON round trip, validate và lỗi tiếng Việt, EHO chưa triển khai báo rõ, benchmark CSV/JSON/summary 5 seed và lưu run FAILED, schema/protocol EHO độc lập không import EHO/GUI.
+Ba notebook tham chiếu gốc37/20/43cells được phục hồi để đọc từ Git và backup, nhưng code/kết luận cũ không được copy sang bản mới. Bản bàn giao dùng public solve/load_matrix/GAConfig/RunResult, không import GA.py/TSP.py hoặc chỉnh sys.path.
 
-## Một run CLI thực
+| Notebook | Cells/code cells | Nội dung | Quick runs | Figures | Root/.venv Run All(s) | Experiment/venv sạch(s) |
+|---|---:|---|---:|---:|---:|---:|
+| [Experiment1–2](../Experiment/Experiment%201-2.ipynb) |17/10|Operators OFAT, sensitivity, hội tụ/diversity|80|4|6.742|4.186|
+| [Experiment3](../Experiment/Experiment%203.ipynb) |13/8|Phân bố/stability/excess so với best-observed|30|2|3.999|3.814|
+| [Experiment4](../Experiment/Experiment%204.ipynb) |13/8|15/26/42/48city, P1/P2, accounting/local-search trade-off|120|3|9.063|9.009|
 
-```text
-distance=1225
-tour=0 → 1 → 14 → 13 → 12 → 11 → 10 → 9 → 7 → 6 → 5 → 8 → 4 → 3 → 2 → 0
-seed=42; iterations=250; evaluations=19580; runtime=0.235404s; status=MAX_ITERATIONS
-```
+**3/3 Run All pass ở cả hai cwd/kernel**. Mỗi lượt230runs; hai lượt lặp cùng seeds để kiểm tra portability, không coi là460seed độc lập. Mọi numeric summaries khớp giữa môi trường; thời gian không cần khớp. Notebook hợp lệ nbformat4.5, mọi code cell có execution_count, không output lỗi/traceback, plots được tạo và đã xem trực quan mẫu ở từng notebook. Kích thước bản executed khoảng164/102/127KB, không nhét raw JSON hàng MB. Outputs bảng/ảnh hiện tại là lần Run All bằng `.venv` dự án.
 
-Đây là lần chạy cuối; lần trước cùng seed/config cũng distance=1225 nhưng runtime=0.238810s. Runtime không thuộc cam kết deterministic. Report nhỏ `example_ga15_seed42.json` giữ route/core/config/counters, bỏ history chỉ ở bản tóm tắt; full JSON với history ở outputs/runs/ga-15-42.json.
+Quick seeds `[11,23,37,53,71]`; Full opt-in25seeds `[101..125]` **chưa chạy nghiệm thu**. Mỗi notebook có run-count cap, tổng solver-time cap120s Quick/600s Full, cooperative per-run cap5s/15s và finite evaluation budgets; không vòng chạy tới target. Tổng cap không phải hard real-time và không bao gồm người dùng ngồi đọc giữa cell. First cell hướng dẫn kernel; tìm root từ cwd/parents, không hard-code đường dẫn cá nhân hoặc os.chdir.
 
-## Benchmark GA nhiều seed
+### Notebook1–2: operators và sensitivity
 
-Config thực: `experiments/configs/baseline.json`. Seeds `[11,23,37,53,71]`, population 80, generations/max_iterations 250, tournament k3, OX 0.9, inversion 0.15, elites 2, random-only, local search OFF. Full run evaluations = 80 + 250×78 = **19580** ở mọi run. Không callback/render trong benchmark, thời gian chỉ solver, không loader/export/validation ngoài solver.
+15city,P40,elites2,Quick budget2000. So control với rank/roulette/PMX/swap/insertion/scramble, mỗi lần đổi một yếu tố, không tích3×2×4. Các operator runs đều2000evaluations. Sensitivity thay P20/P80, mutation0.05/0.30, generations10/max_iterations20, elites0/4 và crossover0.60. Với cap thế hệ, actual evaluations thấp hơn được báo rõ; không gọi đó là so sánh fixed-budget công bằng. Base đã đặt generations/max_iterations2000; muốn vượt250 phải tăng cả hai caps.
 
-| Dataset | Runs hợp lệ | Distance mean ± sample std | Min / median / max | Runtime mean (s) | Evaluations/run |
-|---|---:|---:|---:|---:|---:|
-| 03Cities-6 | 5 | 6.00 ± 0.00 | 6 / 6 / 6 | 0.146244 | 19580 |
-| 04Cities-189 | 5 | 189.00 ± 0.00 | 189 / 189 / 189 | 0.157096 | 19580 |
-| 06Cities-1248 | 5 | 1248.00 ± 0.00 | 1248 / 1248 / 1248 | 0.174855 | 19580 |
-| 15Cities-1194 | 5 | 1200.20 ± 13.86 | 1194 / 1194 / 1225 | 0.236574 | 19580 |
-| 26Cities-937 | 5 | 977.20 ± 18.27 | 960 / 972 / 998 | 0.303020 | 19580 |
-| 42Cities-699 | 5 | 781.00 ± 23.29 | 741 / 788 / 802 | 0.404949 | 19580 |
-| 48Cities-33523 | 5 | 37969.80 ± 1056.48 | 36578 / 38225 / 39314 | 0.460955 | 19580 |
+| Variant | Mean/median cost | Sample std |
+|---|---:|---:|
+| Control |1235.0/1225|43.86|
+| Rank |1413.6/1402|81.79|
+| Roulette |1400.8/1340|158.48|
+| PMX |1275.4/1279|38.34|
+| Swap |1317.0/1289|113.40|
+| Insertion |1319.8/1287|68.16|
+| Scramble |1473.0/1391|152.78|
 
-Raw thật: `experiments/reports/ga_p0_raw.csv`. Summary machine-readable có đầy đủ mean/std/median/min/max cả distance và runtime, counts failed/success ở `ga_p0_summary.json`. Bảng tạo tự động `ga_p0_table.md`. Full structured JSON từng seed có route/history/config/environment/run_id tại `outputs/benchmarks/ga-p0/` (gitignore). Lần chạy benchmark đầu cũng 35 valid và cùng distance, runtime khác; bảng ở đây là lần cuối, không chọn seed có lợi để tính trung bình. Khi rerun cùng output_dir các file sẽ bị ghi đè; đổi output_dir để bảo tồn nhiều đợt đo.
+PMX không hơn control ở cấu hình này. Notebook có table actual evaluations/runtime, bar mean±sample std, convergence best-so-far theo cumulative evaluations và diversity trên population commit. Đồ thị một seed minh họa dùng seed11 cố định, không chọn run tốt nhất hoặc nội suy mean qua seeds. NN/mixed/adaptive nâng cao ở notebook này chỉ chạy Full; Quick thông báo rõ phần chưa chạy.
 
-Known optimum/gap để trống trong registry/raw, chưa xác minh provenance và từng phần tử từ upstream. Không suy luận optimum 42 chỉ vì route tuần tự có cost=699. Benchmark **chỉ GA**, không gọi là so sánh GA–EHO. Legacy cũ khác operator/budget/seed, nên không so runtime để tuyên bố speedup. Các run có result hợp lệ khi chạm time/evaluation budget vẫn lưu stopping_reason; lỗi solver/validation được lưu FAILED và error, không bỏ khỏi raw. Dataset/config lỗi trước run làm fail-fast với thông báo CLI, chưa có ExperimentRecord riêng cho lỗi nạp dataset.
+### Notebook3: distribution/stability
 
-## Profiling và đề xuất có số liệu
+6datasets3/6/15/26/42/48city,P40,budget4000,5seed/dataset. Histogram không tự thêm bin giả tại0; mỗi panel có thang chi phí riêng. Excess được định nghĩa distance−best_observed; relative excess chỉ khi best_observed>0. Best-observed là min mẫu, không phải optimum của bài lớn.
 
-Profile cuối trên 48 city seed42: 7.043.058 function calls, tổng dưới profiler 1.837s, solver 1.717s. Cumulative (có lồng nhau, **không cộng trực tiếp**) objective wrapper ~0.714s, OX ~0.702s, validate_route ~0.291s, selection ~0.178s. Bản text đầy đủ: `experiments/reports/profile_ga48.txt`. Đây là run **bật profiler**, không thay thế runtime benchmark không profiler (~0.461s trung bình 5 seed trên cùng máy).
+| n | Min/mean/median/max | Sample std | Tỉ lệ hit min quan sát |
+|---|---:|---:|---:|
+|3|6/6/6/6|0|100%|
+|6|1248/1248/1248/1248|0|100%|
+|15|1194/1200.2/1194/1225|13.86|80%|
+|26|969/1046/1034/1186|82.85|20%|
+|42|1102/1151.6/1133/1211|49.75|20%|
+|48|51215/55404.6/55339/59638|3031.79|20%|
 
-Ưu tiên tối ưu tiếp theo nếu leader cần: đo microbenchmark OX để giảm duyệt/index modulo/lặp len trên tail; giữ output deterministic và permutation tests. Objective validation có chi phí nhưng chưa bỏ khỏi đường mặc định; nếu đề xuất fast path nội bộ, cần invariant/test chứng minh và thống nhất objective counting trước. Rank hiện sort mỗi lần chọn parent: profile riêng trước ablation lớn, có thể chuẩn bị ranking một lần/generation. Chưa làm tối ưu này, chưa đổi NumPy, chưa tuyên bố “đã tối ưu” hoặc nhanh hơn legacy. Default 48 city dưới một giây trung bình trong batch này đủ smoke headless, không chứng minh GUI responsive.
+Hit-rate không phải xác suất tìm optimum thật; min/hit có thể đổi khi thêm seeds. So sánh std tuyệt đối giữa các thang cost khác nhau không phải một đánh giá uncertainty chuẩn hóa. Notebook kiểm chứng offline n3/n6 bằng2!/5!tail permutations, cost tính trực tiếp từ matrix/cạnh cuối: minima6/1248. Đây chỉ là kiểm chứng nhỏ, không thêm solver thứ ba và không thay registry known_optimum=None.
 
-## Giới hạn và việc kế tiếp
+### Notebook4: challenging cases và kết quả âm
 
-P0 GA có kiểm thử, không đồng nghĩa toàn bộ P0 dự án đã xong. Chưa test clean install trên máy thứ hai, Tkinter UI/cancel bằng nút, ảnh render bằng mắt, TSPLIB semantics, EHO, PMX, formal type/lint check hoặc ablation operators nhiều seed. Chưa có xác nhận quyền sử dụng code/dataset bằng văn bản. Chưa tạo PR/commit.
+15/26/42/48city,P40,budget4000,5seeds,6variants. Cùng actual evaluations, ghi thêm runtime, committed generations và full local calls. Mean cost:
 
-Thứ tự task: (1) leader review API/ownership và provenance/permission; (2) ba thành viên EHO triển khai riêng khi nhận lệnh, giữ common contract + tests; (3) GA P1 PMX/ablation và profile có trước/sau; (4) GUI Tkinter worker/queue và benchmark liên thuật toán theo evaluation budget sau khi EHO pass tests. Không bắt đầu các giai đoạn đó trong lần này.
+| n | Control | PMX | Mixed25% | NN | Adaptive | GA+2-opt |
+|---|---:|---:|---:|---:|---:|---:|
+|15|1200.2|1219.2|1194.0|1194.0|1228.0|1336.2|
+|26|1046.0|1054.0|958.6|961.8|1016.4|1388.8|
+|42|1151.6|1114.8|811.8|782.2|1112.4|1750.2|
+|48|55404.6|55073.2|37222.2|36559.0|53912.2|81489.6|
+
+2-opt **kém control ở cả bốn bài** trong preset này, dù mỗi accepted move cải thiện child. Trên48city, local probes tiêu thụ trung bình3163.4/4000calls, chỉ commit20.6generations so control104. Không coi probes là0work; full objective calls nằm trong total evaluations. NN/mixed tốt hơn trên mẫu này nhưng có thêm initialization work trong runtime. Giữ default random/tournament/OX/inversion để so với EHO sau này; không chọn default chỉ từ một instance/5seed.
+
+Notebook dùng convergence fixed seed11, ma trận chi phí48city và route text đóng vòng để minh họa; không vẽ tọa độ đường phố/GPS. Full thêm adaptive+2-opt nhưng chưa chạy trong phiên Quick.
+
+## QA sau khi xóa tests
+
+Bộ assertions tạm **ngoài repo** đã thực chạy bằng interpreter sạch: **2071checks pass,0fail**. Có OX/PMX/mutation trên3/4/6/15/26/42/48city nhiều seed; selection ties/zero/extreme costs; parent immutable; NN/mixed; odd P; objective sum độc lập; RNG/reproducibility; elitism/global archive khi population cuối xấu đi; two iteration caps; atomic/time/cancel/partial; callback exceptions; exact objective-call counts ở budget9..29, adaptive/2-opt counters và invalid configs. Test riêng cố ý inject lỗi xác nhận benchmark ghi đủ5FAILED, không nuốt failure; không trộn lỗi tiêm vào batch thực nghiệm thật.
+
+CLI validate7/7dataset pass, SHA256 trước/sau không đổi. Default và PMX+mixed+budget trên3/15/48city, mỗi cấu hình chạy2lần: route/cost/evaluations/status/numeric history giống nhau, cost đối chiếu trực tiếp matrix. Mỗi default run19580evaluations/250iterations; mỗi budget variant6000/75full iterations, phần generation sau được ghi partial theo contract.
+
+| n | Default distance | PMX+mixed distance | Seed |
+|---|---:|---:|---:|
+|3|6|6|42|
+|15|1225|1194|42|
+|48|38410|36098|42|
+
+Đây là smoke một seed, không kết luận ưu thế tổng quát từ bảng này. RunResult cost/route hợp lệ; history0/final/monotonic và evaluation counts đã được kiểm tra độc lập.
+
+## Benchmark mẫu sau cleanup
+
+Đã chạy `python -m ga_eho_tsp.cli benchmark --config examples/ga_benchmark.json` bằng venv sạch. **35runs=7datasets×5seeds,0failed,tất cả valid**, mỗi run6000evaluations. P80,random/tournament/OX/inversion,elites2,generations/max_iterations2000,record_every5; actual committed generation có thểpartial vì budget. Paths resolve từ examples/, outputs đi vào ignored outputs/ rồi được archive/xóa trước bàn giao.
+
+| n | Mean distance | Sample std | Runtime mean(s) |
+|---|---:|---:|---:|
+|3|6|0|0.043994|
+|4|189|0|0.047088|
+|6|1248|0|0.050767|
+|15|1200.2|13.86|0.064215|
+|26|1056.4|72.84|0.081771|
+|42|1166.2|26.28|0.101169|
+|48|54194.4|3861.50|0.115391|
+
+CSV/structured JSON được kiểm tra lại bằng route invariants và cost sum độc lập, không chỉ tin exit0. Summary có mean/sample std/median/min/max, config/seed/version/source hashes; raw/history lưu trong evidence ZIP **ngoài repo** theo source_attribution.md. Không giữ thư mục reports/outputs trong cây bàn giao. Unknown optimum/gap để trống, không lấy name hint.
+
+## Lịch sử và giới hạn bàn giao
+
+Paired performance trước đây có median speedup khoảng1.21×/1.72×/1.68× (tournament/rank/roulette,48city,19580evaluations). **Đây là lịch sử đo phiên trước**, không phải số được đo lại trong final cleanup. Số liệu/full source/report cũ được bảo toàn trong backup; không có lệnh paired-performance mồ côi trong code bàn giao. Final cleanup không sửa GA nên không tuyên bố tối ưu mới. Kết quả âm2-opt trước đây vẫn được giữ, và batch mới cũng cho thấy trade-off âm trong preset Quick này.
+
+Đã kiểm tra compileall, pip check ở2venv, imports, shared-domain bytes/solver signature, expected CLI EHO rejection, notebook Run All, sample config, Markdown links và cây artifact cuối. Không commit/push/reset/đổi branch; các thay đổi chưa commit trước phiên có backup và được giữ trừ phần cleanup leader đã chỉ định.
+
+Giới hạn: Full Mode chưa chạy, chỉ5seed Quick; không có kiểm định thống kê rộng/máy thứ hai; optimum/licensing/provenance chưa xác minh đầy đủ; EHO/GUI/TSPLIB chưa có; không có suite pytest thường trực sau bàn giao. Notebook inline checks và QA release không bảo đảm thay đổi EHO tương lai không gây regression. Mọi thay đổi domain phải được leader review, nên thống nhất khôi phục regression suite từ backup khi mở giai đoạn EHO.

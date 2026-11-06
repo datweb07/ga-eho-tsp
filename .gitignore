@@ -40,5 +40,7 @@ dist/
 Thumbs.db
 
 # Generated experiment outputs
-outputs/
+/outputs/
+/experiments/reports/
 results/
+*.prof

@@ -1,59 +1,75 @@
-# Kiến trúc và hợp đồng bàn giao GA → EHO
+# Hợp đồng GA–EHO và kiến trúc bàn giao
 
-Baseline được đọc toàn bộ: `GUIDELINES.md`, 940 dòng, tiêu đề FINAL.MD, V1.0. Không có `final.md` trong workspace tại thời điểm audit. Không đổi tên/ghi đè tài liệu này. Nội dung triển khai bám các mục 4–7; cây mục 6 là cây đích nên chỉ tạo các module đang dùng. Không có folder hoặc solver EHO giả.
+Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. **EHOConfig chỉ là schema; chưa có EHO solver hoặc GUI.**
 
-Owner `domain/*`, objective, configs, protocols và benchmark chung: **Trương Thành Đạt**. Thành viên EHO cần đề xuất PR/change request có lý do, tác động và test trước khi thay hợp đồng; không sửa objective để thích nghi với EHO.
+## Luồng dữ liệu
 
 ```mermaid
 flowchart LR
-    TXT[Ma trận whitespace] --> Loader[data.matrix_loader]
+    CLI[CLI / notebook] --> Loader[data.matrix_loader]
     Loader --> Problem[domain.TSPProblem]
-    CLI[cli validate / solve / benchmark] --> Loader
-    CLI --> GA[algorithms.ga.solve]
-    GA --> Problem
-    GA --> Contracts[domain models / protocols / operators]
-    GA --> Result[RunResult + IterationStat]
-    Result --> CLI
-    Bench[experiments.benchmark] --> GA
-    Bench --> CSV[Raw CSV / JSON / summary]
+    CLI --> Solver[algorithms.ga.solve]
+    Solver --> Problem
+    Solver --> Result[domain.RunResult]
+    Bench[experiments.benchmark] --> Solver
+    Result --> Export[JSON / CSV / Markdown / notebook plots]
 ```
 
-`domain` chỉ phụ thuộc stdlib. `data` và `algorithms.ga` phụ thuộc domain. `cli` và `experiments` gọi public API, không đọc population. GUI Tkinter + ttk + Matplotlib là giai đoạn sau; không thay framework. Benchmark không import Matplotlib/Tkinter/NumPy.
+Domain chỉ dùng stdlib, không import loader/algorithm/GUI. Loader và GA phụ thuộc domain. CLI/notebook/benchmark gọi public API; không đọc hoặc sửa population. Benchmark/export là code chương trình thật, được giữ. Không có runtime dependency tới tests, report cũ, notebook gốc hoặc archive ngoài repository. Notebook không chỉnh sys.path; cần editable installation.
 
-## Bất biến dữ liệu
+## Public API
 
-- `TSPProblem`: name, tuple-of-tuples distance_matrix, dimension (property), source, coordinates hoặc None, known_optimum hoặc None, metadata. Sao chép matrix/tọa độ để caller không sửa solver input; metadata là mapping read-only ở mức ngoài, các giá trị metadata nên dùng scalar/immutable. Solver không sửa problem.
-- Matrix n≥3, square, finite, nonnegative, diagonal=0; số nguyên đối xứng chính xác, float đối xứng với sai số tuyệt đối ≤1e-9, không dùng relative tolerance. Không có ATSP. Cho phép cạnh bằng 0. Chi phí quá lớn gây overflow bị từ chối rõ ràng.
-- `Route = tuple[int, ...]`: city 0 đầu tiên, đủ mỗi city 0..n−1 một lần, không city 0 ở cuối. Objective validate route mỗi lần rồi tính đúng n cạnh. Chỉ CLI đóng vòng hiển thị; JSON giữ route core.
-- Loader đọc UTF-8/BOM, whitespace, không header; reject dòng rỗng và dữ liệu sai. Registry có nguồn và name_hint; **known_optimum=None** khi chưa xác minh từng file với nguồn gốc.
-
-## Solver contract v0.1
+| API | Input → output / trách nhiệm |
+|---|---|
+| data.matrix_loader.load_matrix | path → validated TSPProblem, SHA256 metadata |
+| TSPProblem.route_length | route → full cycle cost, có validation |
+| domain.objective.validate_route | sequence,n → None hoặc ValueError |
+| domain.operators.random_permutation | n,random.Random → Route khóa0 |
+| algorithms.ga.solve | problem,GAConfig,progress_callback/stop_requested → RunResult |
+| domain.protocols.Solver[Config] | protocol dùng được với GAConfig/EHOConfig |
+| experiments.benchmark.benchmark | config path → summary; xuất raw/structured results |
 
 ```python
-solve(problem: TSPProblem, config: GAConfig, *,
-      progress_callback: ProgressCallback | None = None,
-      stop_requested: StopRequested | None = None) -> RunResult
-# Solver[GAConfig] và Solver[EHOConfig] trong domain.protocols.
-# Solver EHO tương lai nhận EHOConfig, trả cùng RunResult.
+solve(problem, config, *, progress_callback=None, stop_requested=None) -> RunResult
 ```
 
-RNG mỗi run là `random.Random(config.seed)`, được tiêm tới mọi operator; không gọi RNG global. Không I/O/render trong solver. Exception callback và KeyboardInterrupt truyền ra caller, không âm thầm trả success.
+`Route=tuple[int,...]`, gồm mỗi city0..n−1 đúng một lần, city0 đầu tiên, không khép vòng. Objective tính đủ n cạnh kể cả cạnh cuối về0; chỉ presentation thêm0 cuối. Matrix n≥3, square, finite, nonnegative, diagonal0, symmetric: integers so chính xác, floats abs tolerance1e-9. Zero off-diagonal được phép. Không có ATSP.
 
-`RunConfigBase`: seed (int≥0), max_iterations≥1, max_evaluations hoặc None, time_limit_seconds>0 hoặc None, record_history_every≥1. GA có thêm generations; số vòng hữu hiệu = `min(generations, max_iterations)`; EHO dùng `min(iterations, max_iterations)`. Hai giới hạn đều tường minh trong snapshot; tăng generations trên 250 cần tăng max_iterations nếu muốn vượt 250. Đây là quy tắc phân giải hai field baseline, không tự xóa/đổi tên field.
+## Dataclasses giữ nguyên
 
-GAConfig mặc định: population_size=80, generations=250, tournament/3, ox/0.9, inversion/0.15, elite_count=2, random initialization, local search OFF. Chấp nhận population lẻ≥4; elite_count trong 0..population_size−1. Local search fields có trong schema nhưng config bật tính năng chưa làm bị reject.
+| Model | Fields / ngữ nghĩa |
+|---|---|
+| TSPProblem | name,distance_matrix,dimension(property),source,coordinates,known_optimum,metadata |
+| RunConfigBase | seed,max_iterations,max_evaluations,time_limit_seconds,record_history_every |
+| GAConfig | base + population/generations/selection/crossover/mutation/elite/initialization và các GA P1/P2 options |
+| EHOConfig | base + clan_count,elephants_per_clan,iterations,alpha,beta,separation_count_per_clan,initialization_method,preserve_global_best; population_size=clan_count×elephants_per_clan |
+| IterationStat | iteration,best_current,best_so_far,mean_fitness,evaluations,elapsed_seconds,population_diversity |
+| RunResult | algorithm,problem_name,best_route,best_distance,iterations_completed,evaluations,elapsed_seconds,seed,history,config_snapshot,stopping_reason,is_valid,metadata |
 
-EHOConfig là **schema**, không có solver: clan_count=4 (≥2), elephants_per_clan=20 (≥3), iterations=250, alpha=0.7, beta=0.3 trong [0,1], separation_count_per_clan=1 (1..clan_size−1), initialization_method=random, preserve_global_best=True; population_size là property tích hai kích thước. Bao gồm mọi field base và validation. Không import `eho` ở bất kỳ đâu.
+TSPProblem sao chép matrix/tọa độ; metadata read-only ở outer mapping, nên dùng scalar/immutable values. Không sửa problem trong solver. Result là snapshot riêng, route/history tuple; config_snapshot/metadata trong result có thể được caller sửa sau run. Không chia sẻ trạng thái solver sống.
 
-## Stop/progress/evaluation semantics
+Final cleanup giữ **nguyên byte toàn bộ domain**, gồm cả GAConfig/EHOConfig, objective/operators/protocols; GA/loader/CLI cũng không đổi logic. Chỉ bỏ paired-performance tool không còn use case runtime. Hợp đồng ứng dụng hiện tại0.2.0 vẫn theo GUIDELINES V1.0, không sửa file đặc tả đóng băng.
 
-1. Khởi tạo và đánh giá toàn bộ population là bước **atomic** để luôn có RunResult hợp lệ/history(0), kể cả stop đã được yêu cầu trước khi gọi. max_evaluations nhỏ hơn population bị reject, không tự tăng budget. Cancel/time được kiểm tra ngay sau bước này và trước mỗi offspring. Vì vậy deadline là cooperative, có thể vượt bởi khởi tạo/một objective/callback, không phải hard real-time.
-2. Mỗi candidate thực sự gọi `problem.route_length` tăng evaluations một lần. Elites mang score cũ, không đánh giá lại; offspring dù trùng tour vẫn đánh giá và đếm. Không cache. Full run = P + G×(P−E). Validation/cost check độc lập bên ngoài solver không thuộc evaluations/runtime solver.
-3. Global archive cập nhật ngay sau mỗi đánh giá. Chỉ commit population đầy đủ; dừng giữa vòng giữ population đã commit, archive vẫn chứa best của con đã đánh giá. iterations_completed chỉ đếm vòng đầy đủ; metadata.partial_iteration nói rõ vòng dang dở.
-4. History/progress ghi iteration 0, mỗi `record_history_every` vòng đầy đủ và snapshot cuối nếu chưa ghi hoặc evaluations đổi. Khi dừng giữa vòng, snapshot cuối có thể trùng iteration nhưng evaluations lớn hơn: best_current/mean_fitness là population đã commit, best_so_far gồm con đã đánh giá. Callback nhận dataclass frozen, không có quần thể. Thứ tự history là thứ tự sự kiện, không phải index theo iteration.
-5. stopping_reason: MAX_ITERATIONS, MAX_EVALUATIONS, TIME_LIMIT, CANCELLED. Vòng lặp hết giới hạn iteration thì MAX_ITERATIONS; nếu đồng thời chạm budget tại vòng cuối, iteration cap có ưu tiên vì không còn vòng mới. Callback nên nhanh; runtime bao gồm chi phí callback vì thực thi đồng bộ. Benchmark không dùng callback nên đo solver-only, loại loader/export.
-6. RunResult có đầy đủ trường mục 5.2 baseline. result/config_snapshot/metadata là snapshot riêng, không chứa trạng thái solver sống. history/route là tuple; mapping trong result có thể sửa bởi caller sau run. elapsed_seconds không thuộc cam kết tái lập; nghiệm/chi phí/evaluations/history số học có thể tái lập trong cùng version/môi trường khi không dùng time/cancel phụ thuộc thời gian.
+## RNG, evaluations, stop và progress
 
-## Bàn giao
+1. Mỗi run tạo `random.Random(config.seed)`, tiêm vào operator, không sửa RNG global. Cùng problem/config/seed/version/môi trường cho nghiệm, counters và numeric history tái lập; elapsed/time-based cancellation không thuộc cam kết này.
+2. GA dùng `min(generations,max_iterations)`; EHO tương lai dùng `min(iterations,max_iterations)`. Giữ cả field, không tự chọn cap lớn hơn. Khởi tạo và đánh giá toàn population **atomic**, để có history0 và result hợp lệ. Budget nhỏ hơn P bị reject. Stop/time bắt đầu được kiểm tra ngay sau khởi tạo và trước mỗi candidate/probe, không hứa hard real-time.
+3. Mỗi full objective call để đánh giá candidate tăng evaluations một lần, kể cả tour trùng hoặc probe bị reject. Elites mang cost cũ, không đánh giá lại. Khi local search OFF và đủ G full generations: `P+G(P−E)`. NN matrix lookups không phải full objective calls nhưng nằm trong solver runtime. Không cache/fast objective ẩn.
+4. Global-best archive cập nhật sau từng call. Chỉ commit population đủ P. Dừng giữa generation/local search vẫn giữ best của mọi candidate/probe đã đánh giá, iterations_completed chỉ đếm vòng đủ. Metadata.partial_iteration ghi vòng dang dở.
+5. History/progress có iteration0, mỗi record_history_every vòng và snapshot cuối khi cần. Khi partial, có thể hai snapshots cùng iteration nhưng evaluations khác. Best_current/mean/diversity là population commit; best_so_far còn tính best của con/probe chưa commit. Consumer dùng evaluations làm trục work và không coi index history là iteration.
+6. Callback nhận frozen IterationStat; chỉ thông báo snapshot, không can thiệp population. Callback exceptions và KeyboardInterrupt truyền ra caller. Runtime có tính thời gian callback đồng bộ; benchmark không dùng callback và loại loader/export/plot khỏi solver runtime.
+7. Reasons: MAX_ITERATIONS, MAX_EVALUATIONS, TIME_LIMIT, CANCELLED; **STAGNATION** chỉ khi GA opt-in. Nếu iteration cap hết đúng lúc chạm budget, iteration cap ưu tiên vì không còn vòng kế tiếp. Stagnation kiểm tra sau full generation; cancel/time/budget giữa generation vẫn được ưu tiên.
 
-Ba thành viên EHO có thể import models/protocols/objective/random_permutation mà không import GA; đọc mục 8 baseline để triển khai D-EHO sau lệnh riêng. EHO 1 nhận clans/main loop; EHO 2 nhận discrete operators/correctness; EHO 3 nhận experiment/integration. Không có thay đổi baseline được thực hiện trong lần này. Leader cần review hợp đồng v0.1, xác nhận cách phối hợp hai iteration caps và bước khởi tạo atomic trước khi các PR EHO phụ thuộc nó; nếu muốn đổi semantics, dùng change control cùng tests. Chưa tự gán tên thật cho ba thành viên.
+## GA P1/P2 và consumer tương lai
+
+Default random/tournament/OX/inversion/elites2; adaptive, stagnation và local search OFF. NN/mixed/PMX là variants riêng. Diversity dùng (unique symmetric tours−1)/(P−1), gộp route đảo chiều, chỉ dựa population commit. EHO có thể để diversity=None nếu chưa cung cấp metric có định nghĩa rõ.
+
+Adaptive metadata.effective_mutation_rates gồm iteration,rate,completed; vòng partial có completed=False. Bật2-opt có `algorithm="GA+2-opt"`; metadata.local_search_full_evaluations nằm **trong** total evaluations, local_search_accepted_moves là số move cải thiện. Mỗi offspring có move/probe caps, mỗi probe gọi full objective; không có delta work miễn phí. Consumer không đóng cứng reason/algorithm chỉ thành một giá trị `ga` hoặc MAX_ITERATIONS.
+
+Team EHO đọc mục8 của GUIDELINES và dùng cùng TSPProblem, objective, RNG/stop/progress/result. EHO1 phụ trách clans/main loop; EHO2 discrete operators/correctness; EHO3 evaluation/integration. Không tự sửa domain/GA để làm EHO chạy, không triển khai EHO giả. Chưa điền tên thật khi leader chưa xác nhận.
+
+## Chủ đích bỏ test suite
+
+Đã chạy 166 regression tests trước khi xóa tests theo chỉ thị leader, nên repo cuối không còn automated pytest regression suite; việc này là một thay đổi có chủ đích và là rủi ro khi phát triển EHO.
+
+GUIDELINES giữ nguyên dù cây đích từng yêu cầu tests. Bằng chứng và source tests có trong backup ngoài repo, mô tả ở [source_attribution.md](source_attribution.md). Các inline assertions trong notebook và QA release không thay thế đầy đủ một suite regression thường trực; leader/team cần thống nhất khôi phục suite khi phát triển EHO. Release checks thật nằm ở [experiments.md](experiments.md).

@@ -85,6 +85,13 @@ class GAConfig(RunConfigBase):
     initialization_method: str = "random"
     local_search_enabled: bool = False
     local_search_max_moves: int = 0
+    nn_seed_fraction: float = 0.25
+    stagnation_patience: int | None = None
+    adaptive_mutation: bool = False
+    adaptive_min_rate: float = 0.05
+    adaptive_max_rate: float = 0.5
+    adaptive_patience: int = 20
+    local_search_max_probes: int = 20
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -99,12 +106,27 @@ class GAConfig(RunConfigBase):
             raise ValueError("max_evaluations phải đủ đánh giá quần thể khởi tạo.")
         probability("crossover_rate", self.crossover_rate)
         probability("mutation_rate", self.mutation_rate)
-        if self.selection_method not in {"tournament", "rank", "roulette_wheel"}:
+        probability("nn_seed_fraction", self.nn_seed_fraction)
+        probability("adaptive_min_rate", self.adaptive_min_rate)
+        probability("adaptive_max_rate", self.adaptive_max_rate)
+        integer("adaptive_patience", self.adaptive_patience)
+        integer("local_search_max_probes", self.local_search_max_probes)
+        if type(self.adaptive_mutation) is not bool or self.adaptive_min_rate > self.adaptive_max_rate:
+            raise ValueError("Adaptive mutation cần bool, 0 <= min_rate <= max_rate <= 1.")
+        if self.stagnation_patience is not None:
+            integer("stagnation_patience", self.stagnation_patience)
+        if not isinstance(self.selection_method, str) or self.selection_method not in {"tournament", "rank", "roulette_wheel"}:
             raise ValueError("Selection hỗ trợ tournament, rank, roulette_wheel.")
-        if self.crossover_method != "ox" or self.mutation_method not in {"inversion", "swap", "insertion", "scramble"}:
-            raise ValueError("Crossover chỉ hỗ trợ ox; mutation: inversion/swap/insertion/scramble.")
-        if self.initialization_method != "random" or self.local_search_enabled is not False or self.local_search_max_moves != 0:
-            raise ValueError("Hiện chỉ hỗ trợ random initialization, local search OFF.")
+        if self.crossover_method not in ("ox", "pmx") or not isinstance(self.mutation_method, str) or self.mutation_method not in {"inversion", "swap", "insertion", "scramble"}:
+            raise ValueError("Crossover: ox/pmx; mutation: inversion/swap/insertion/scramble.")
+        if self.initialization_method not in ("random", "nearest_neighbor", "mixed"):
+            raise ValueError("Initialization: random/nearest_neighbor/mixed.")
+        if type(self.local_search_enabled) is not bool:
+            raise ValueError("local_search_enabled phải là bool.")
+        if self.local_search_enabled and self.local_search_max_moves < 1:
+            raise ValueError("2-opt cần local_search_max_moves >= 1.")
+        if not self.local_search_enabled and self.local_search_max_moves != 0:
+            raise ValueError("Local search OFF yêu cầu local_search_max_moves=0.")
 
 
 @dataclass(frozen=True, kw_only=True)

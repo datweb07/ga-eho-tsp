@@ -3,7 +3,7 @@
 Ma trận explicit whitespace, không header, city 0-based ở core.
 Nguồn trực tiếp: bộ code nhóm đưa vào workspace, tham chiếu ThienNguyen3001/Travelling-Salesman-Genetic-AI-Final.
 Các file được chuyển nguyên byte từ data/ sang data/legacy/. Chưa xác minh quyền phân phối hoặc ánh xạ từng file với nguồn dataset gốc.
-Hậu tố tên chỉ là hint; registry known_optimum=None. Xem docs/audit_legacy.md về nguồn/giấy phép và kiểm chứng exhaustive 3/4/6 city.
+Hậu tố tên chỉ là hint; registry known_optimum=None. Xem [nguồn/giấy phép](../docs/source_attribution.md) và [thí nghiệm](../docs/experiments.md). Notebook Experiment3 kiểm chứng độc lập hai bài3/6city bằng enumeration nhỏ, không nâng optimum của các bài lớn hoặc thay registry.
 
 Tất cả 7 file đã qua dimension, square, symmetry, diagonal=0, finite, nonnegative checks.
 

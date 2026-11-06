@@ -1,7 +1,0 @@
-{
-  "algorithm": "ga",
-  "seeds": [11, 23, 37, 53, 71],
-  "datasets": ["../../data/legacy/03Cities-6.txt", "../../data/legacy/04Cities-189.txt", "../../data/legacy/06Cities-1248.txt", "../../data/legacy/15Cities-1194.txt", "../../data/legacy/26Cities-937.txt", "../../data/legacy/42Cities-699.txt", "../../data/legacy/48Cities-33523.txt"],
-  "ga": {"population_size": 80, "generations": 250, "max_iterations": 250},
-  "output_dir": "../../outputs/benchmarks/ga-p0"
-}
