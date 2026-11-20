@@ -82,7 +82,7 @@ solve(problem, config, *, progress_callback=None, stop_requested=None) -> RunRes
 
 ## Cấu trúc hiện tại và phần còn lại
 
-Đã có `clans.py`, `discrete_ops.py`, `separation.py`, `solver.py` và package export. `Clan` hiện giữ members/costs bất biến và tính medoid theo thiết kế. `solver.py` chưa dùng `Clan`: nó vẫn lưu nested lists, tự dùng `_move_toward`, và áp dụng alpha-clan-best/beta-global-best. Phần còn lại là nối solver với `Clan`, dùng beta hướng về medoid, và gọi các toán tử đã tách.
+`clans.py`, `discrete_ops.py`, `separation.py` và `solver.py` hiện được nối theo thiết kế: solver dùng `Clan`, beta hướng về medoid, alpha hướng về matriarch, và separation bảo vệ matriarch. Cần review và chạy regression suite trước khi xem core đã nghiệm thu. CLI/benchmark/GUI registration chưa tích hợp.
 
 CLI/benchmark/GUI registration không thuộc thiết kế core này; EHO chưa được tích hợp làm lựa chọn chạy chính thức trong các consumer đó.
 

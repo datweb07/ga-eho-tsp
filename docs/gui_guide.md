@@ -1,6 +1,6 @@
 # Form GA và nghiệm thu bàn giao — 06/11/2026
 
-Ứng dụng dùng Tkinter + ttk + Matplotlib, gọi trực tiếp GA 0.2.0. EHO chưa triển khai. Đây là bàn giao GA để tích hợp EHO, không phải nghiệm thu toàn bộ đồ án.
+Ứng dụng dùng Tkinter + ttk + Matplotlib, gọi trực tiếp GA 0.2.0. EHO core hiện có nhưng chưa được tích hợp vào GUI. Đây là bàn giao GA để tích hợp EHO, không phải nghiệm thu toàn bộ đồ án.
 
 ## Cài và chạy trên Windows / VS Code
 

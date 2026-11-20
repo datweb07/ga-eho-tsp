@@ -131,7 +131,7 @@ class GAConfig(RunConfigBase):
 
 @dataclass(frozen=True, kw_only=True)
 class EHOConfig(RunConfigBase):
-    """Chỉ là schema cho giai đoạn EHO; chưa có thuật toán."""
+    """Cấu hình baseline cho EHO rời rạc trên TSP."""
     clan_count: int = 4
     elephants_per_clan: int = 20
     iterations: int = 250

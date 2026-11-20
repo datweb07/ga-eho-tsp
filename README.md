@@ -58,7 +58,7 @@ python -m ga_eho_tsp.gui
 python Demo.py
 ```
 
-Hai lệnh mở cùng form **Tkinter + ttk + Matplotlib**. Chọn dataset, preset hoặc chỉnh tham số rồi bấm **Chạy GA**; **Dừng** trả best đã tìm được. Xem các tab Tuyến đường, Hội tụ, Chi tiết và lưu JSON/CSV/PNG. Sơ đồ tròn của các ma trận chỉ minh họa, không phải vị trí địa lý. EHO đang phát triển, chưa thể chạy. Xem [hướng dẫn GUI](docs/gui_guide.md) và [bàn giao EHO](docs/eho_handoff.md).
+Hai lệnh mở cùng form **Tkinter + ttk + Matplotlib**. Chọn dataset, preset hoặc chỉnh tham số rồi bấm **Chạy GA**; **Dừng** trả best đã tìm được. Xem các tab Tuyến đường, Hội tụ, Chi tiết và lưu JSON/CSV/PNG. Sơ đồ tròn của các ma trận chỉ minh họa, không phải vị trí địa lý. EHO core đang phát triển nhưng chưa tích hợp GUI. Xem [hướng dẫn GUI](docs/gui_guide.md) và [bàn giao EHO](docs/eho_handoff.md).
 
 ### 3. Kiểm tra dữ liệu và chạy GA bằng CLI
 
@@ -67,7 +67,7 @@ python -m ga_eho_tsp.cli validate --dataset data/06Cities-1248.txt
 python -m ga_eho_tsp.cli solve --algorithm ga --dataset data/15Cities-1194.txt --seed 42 --json outputs/ga.json
 ```
 
-Kết quả hiển thị distance, tour đóng vòng, seed, iterations, evaluations, runtime và stopping reason. File JSON giữ route 0-based không gắn lại city 0 ở cuối. Hiện chỉ có solver GA; EHO chưa triển khai.
+Kết quả hiển thị distance, tour đóng vòng, seed, iterations, evaluations, runtime và stopping reason. File JSON giữ route 0-based không gắn lại city 0 ở cuối. CLI hiện mới hỗ trợ GA; EHO core chưa tích hợp vào CLI.
 
 Ví dụ chọn PMX và mixed initialization, giới hạn 6.000 evaluations:
 

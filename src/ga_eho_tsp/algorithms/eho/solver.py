@@ -7,111 +7,194 @@ from time import perf_counter
 
 from ... import __version__
 from ...domain.models import EHOConfig, IterationStat, RunResult, TSPProblem
-from ...domain.objective import validate_route
+from ...domain.objective import Route, validate_route
 from ...domain.operators import random_permutation
 from ...domain.protocols import ProgressCallback, StopRequested
+from .clans import Clan
+from .discrete_ops import move_toward_best, update_matriarch
+from .separation import separate
 
 
-def _move_toward(route: tuple[int, ...], guide: tuple[int, ...], strength: float, rng: Random) -> tuple[int, ...]:
-    """Apply a randomized subset of swaps that align a permutation with its guide."""
-    result = list(route)
-    target = max(0, min(len(route), round(strength * len(route))))
-    used = 0
-    for index in range(1, len(result)):
-        if result[index] == guide[index]:
-            continue
-        if used >= target or rng.random() >= strength:
-            continue
-        other = result.index(guide[index])
-        result[index], result[other] = result[other], result[index]
-        used += 1
-    return tuple(result)
+def _preserve_global_best(
+    clans: list[Clan],
+    best_route: Route,
+    best_distance: float,
+) -> list[Clan]:
+    """Đưa nghiệm tốt nhất vào clan đầu mà không loại matriarch của clan."""
+    first = clans[0]
+    if best_route in first.members:
+        return clans
+
+    leader_index = first.best_index()
+    replacement_index = first.worst_indices(1, protected_indices=(leader_index,))[0]
+    members = list(first.members)
+    costs = list(first.costs)
+    members[replacement_index] = best_route
+    costs[replacement_index] = best_distance
+    clans[0] = Clan(tuple(members), tuple(costs))
+    return clans
 
 
-def solve(problem: TSPProblem, config: EHOConfig, *,
-          progress_callback: ProgressCallback | None = None,
-          stop_requested: StopRequested | None = None) -> RunResult:
-    """Optimize tours using clan-best attraction and random separation."""
+def solve(
+    problem: TSPProblem,
+    config: EHOConfig,
+    *,
+    progress_callback: ProgressCallback | None = None,
+    stop_requested: StopRequested | None = None,
+) -> RunResult:
+    """Tối ưu tour bằng cập nhật clan, medoid rời rạc và separation.
+
+    Mỗi generation đọc clans hiện tại và tạo clans mới. Nếu dừng giữa
+    generation, các candidate đã đánh giá vẫn có thể cải thiện archive,
+    nhưng quần thể chưa hoàn tất không được commit.
+    """
+    if not isinstance(problem, TSPProblem):
+        raise ValueError("EHO yêu cầu TSPProblem.")
     if not isinstance(config, EHOConfig):
         raise ValueError("EHO yêu cầu EHOConfig.")
-    start, rng = perf_counter(), Random(config.seed)
-    clans = [[random_permutation(problem.dimension, rng) for _ in range(config.elephants_per_clan)]
-             for _ in range(config.clan_count)]
-    costs = [[problem.route_length(route) for route in clan] for clan in clans]
+
+    start = perf_counter()
+    rng = Random(config.seed)
+    clans: list[Clan] = []
+    for _ in range(config.clan_count):
+        members = tuple(
+            random_permutation(problem.dimension, rng)
+            for _ in range(config.elephants_per_clan)
+        )
+        costs = tuple(problem.route_length(route) for route in members)
+        clans.append(Clan(members, costs))
+
     evaluations = config.population_size
-    flat = [(costs[c][i], clans[c][i]) for c in range(len(clans)) for i in range(len(clans[c]))]
-    best_distance, best_route = min(flat, key=lambda item: item[0])
+    initial_candidates = [
+        (clan.costs[index], clan.members[index])
+        for clan in clans
+        for index in range(clan.size)
+    ]
+    best_distance, best_route = min(initial_candidates, key=lambda item: item[0])
+
     history: list[IterationStat] = []
-    completed, partial = 0, False
+    completed = 0
+    partial_iteration = False
 
     def record(iteration: int) -> None:
-        vals = [v for row in costs for v in row]
-        stat = IterationStat(iteration, min(vals), best_distance, fsum(vals)/len(vals), evaluations, perf_counter()-start, None)
+        costs = [cost for clan in clans for cost in clan.costs]
+        stat = IterationStat(
+            iteration=iteration,
+            best_current=min(costs),
+            best_so_far=best_distance,
+            mean_fitness=fsum(costs) / len(costs),
+            evaluations=evaluations,
+            elapsed_seconds=perf_counter() - start,
+            population_diversity=None,
+        )
         history.append(stat)
-        if progress_callback:
+        if progress_callback is not None:
             progress_callback(stat)
 
-    def stop_reason() -> str | None:
-        if stop_requested and stop_requested(): return "CANCELLED"
-        if config.time_limit_seconds is not None and perf_counter()-start >= config.time_limit_seconds: return "TIME_LIMIT"
-        if config.max_evaluations is not None and evaluations >= config.max_evaluations: return "MAX_EVALUATIONS"
+    def get_stop_reason() -> str | None:
+        if stop_requested is not None and stop_requested():
+            return "CANCELLED"
+        if (config.time_limit_seconds is not None
+                and perf_counter() - start >= config.time_limit_seconds):
+            return "TIME_LIMIT"
+        if config.max_evaluations is not None and evaluations >= config.max_evaluations:
+            return "MAX_EVALUATIONS"
         return None
 
     record(0)
-    reason = "MAX_ITERATIONS"
-    for iteration in range(1, min(config.iterations, config.max_iterations)+1):
-        reason_now = stop_reason()
-        if reason_now:
-            reason = reason_now
+    stopping_reason = "MAX_ITERATIONS"
+    iteration_limit = min(config.iterations, config.max_iterations)
+
+    for iteration in range(1, iteration_limit + 1):
+        stop_reason = get_stop_reason()
+        if stop_reason is not None:
+            stopping_reason = stop_reason
             break
-        new_clans, new_costs = [], []
-        old_best = best_distance
-        for ci, clan in enumerate(clans):
-            clan_leader = clan[min(range(len(clan)), key=lambda i: costs[ci][i])]
-            members, member_costs = [], []
-            for ei, route in enumerate(clan):
-                if stop_reason():
-                    reason, partial = stop_reason() or "CANCELLED", True
+
+        next_clans: list[Clan] = []
+        partial_iteration = False
+
+        for clan in clans:
+            leader_index = clan.best_index()
+            leader = clan.members[leader_index]
+            center = clan.center()
+            separated_indices = clan.worst_indices(
+                config.separation_count_per_clan,
+                protected_indices=(leader_index,),
+            )
+            separated_members = separate(
+                clan.members,
+                clan.costs,
+                config.separation_count_per_clan,
+                problem.dimension,
+                rng,
+                protected_indices=(leader_index,),
+            )
+
+            next_members: list[Route] = []
+            next_costs: list[float] = []
+            separated = set(separated_indices)
+
+            for index, route in enumerate(clan.members):
+                stop_reason = get_stop_reason()
+                if stop_reason is not None:
+                    stopping_reason = stop_reason
+                    partial_iteration = True
                     break
-                candidate = _move_toward(route, clan_leader, config.alpha, rng)
-                candidate = _move_toward(candidate, best_route, config.beta, rng)
-                value = problem.route_length(candidate)
+
+                if index == leader_index:
+                    candidate = update_matriarch(route, center, config.beta, rng)
+                elif index in separated:
+                    candidate = separated_members[index]
+                else:
+                    candidate = move_toward_best(route, leader, config.alpha, rng)
+
+                cost = problem.route_length(candidate)
                 evaluations += 1
-                if value < best_distance:
-                    best_route, best_distance = candidate, value
-                members.append(candidate); member_costs.append(value)
-            if partial:
+                if cost < best_distance:
+                    best_route, best_distance = candidate, cost
+                next_members.append(candidate)
+                next_costs.append(cost)
+
+            if partial_iteration:
                 break
-            # Replace the worst clan member(s) with separated random elephants.
-            for _ in range(config.separation_count_per_clan):
-                worst = max(range(len(member_costs)), key=lambda i: member_costs[i])
-                candidate = random_permutation(problem.dimension, rng)
-                if stop_reason():
-                    reason, partial = stop_reason() or "CANCELLED", True
-                    break
-                value = problem.route_length(candidate)
-                evaluations += 1
-                if value < best_distance:
-                    best_route, best_distance = candidate, value
-                members[worst], member_costs[worst] = candidate, value
-            if partial:
-                break
-            new_clans.append(members); new_costs.append(member_costs)
-        if partial:
+            next_clans.append(Clan(tuple(next_members), tuple(next_costs)))
+
+        if partial_iteration:
             break
-        clans, costs = new_clans, new_costs
-        # Preserve the archive in the population for the next clan-best calculation.
+
+        clans = next_clans
         if config.preserve_global_best:
-            wi = max(range(len(costs[0])), key=lambda i: costs[0][i])
-            if best_distance < costs[0][wi]:
-                costs[0][wi], clans[0][wi] = best_distance, best_route
+            clans = _preserve_global_best(clans, best_route, best_distance)
+
         completed = iteration
         if iteration % config.record_history_every == 0:
             record(iteration)
-    if history[-1].iteration != completed or history[-1].evaluations != evaluations:
+
+    if (not history or history[-1].iteration != completed
+            or history[-1].evaluations != evaluations):
         record(completed)
+
     validate_route(best_route, problem.dimension)
-    return RunResult("eho", problem.name, best_route, best_distance, completed, evaluations,
-        perf_counter()-start, config.seed, tuple(history), asdict(config), reason, True,
-        {"partial_iteration": partial, "version": __version__, "dataset_sha256": problem.metadata.get("sha256"),
-         "initialization_atomic": True, "population_diversity": None})
+    return RunResult(
+        algorithm="eho",
+        problem_name=problem.name,
+        best_route=best_route,
+        best_distance=best_distance,
+        iterations_completed=completed,
+        evaluations=evaluations,
+        elapsed_seconds=perf_counter() - start,
+        seed=config.seed,
+        history=tuple(history),
+        config_snapshot=asdict(config),
+        stopping_reason=stopping_reason,
+        is_valid=True,
+        metadata={
+            "partial_iteration": partial_iteration,
+            "version": __version__,
+            "dataset_sha256": problem.metadata.get("sha256"),
+            "initialization_atomic": True,
+            "population_diversity": None,
+            "clan_center": "hamming_medoid",
+        },
+    )

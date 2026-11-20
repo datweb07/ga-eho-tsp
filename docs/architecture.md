@@ -1,6 +1,6 @@
 # Hợp đồng GA–EHO và kiến trúc bàn giao
 
-Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. EHO core hiện có Clan/medoid, solver và toán tử rời rạc nhưng solver chưa dùng cấu trúc clan mới và chưa tích hợp CLI/GUI; xem [thiết kế Discrete EHO](algorithm_eho.md). GUI GA hiện có, xem [hướng dẫn](gui_guide.md).
+Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. EHO core hiện có Clan/medoid, solver và toán tử rời rạc đã nối với nhau; core chưa được nghiệm thu bằng regression suite và chưa tích hợp CLI/GUI. Xem [thiết kế Discrete EHO](algorithm_eho.md). GUI GA hiện có, xem [hướng dẫn](gui_guide.md).
 
 ## Luồng dữ liệu
 
