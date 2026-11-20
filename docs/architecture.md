@@ -1,6 +1,6 @@
 # Hợp đồng GA–EHO và kiến trúc bàn giao
 
-Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. **EHOConfig chỉ là schema; chưa có EHO solver. GUI GA hiện có, xem [hướng dẫn](gui_guide.md).**
+Owner của `domain/*` và hợp đồng chung: **Trương Thành Đạt**. Các thành viên EHO đề xuất thay đổi có lý do, tác động và cách kiểm chứng trước khi sửa contract. EHO là solver độc lập, không import GA private internals. EHO core hiện có solver và toán tử rời rạc nhưng chưa hoàn thiện clan/medoid và chưa tích hợp CLI/GUI; xem [thiết kế Discrete EHO](algorithm_eho.md). GUI GA hiện có, xem [hướng dẫn](gui_guide.md).
 
 ## Luồng dữ liệu
 
@@ -9,16 +9,17 @@ flowchart LR
     CLI[CLI / notebook] --> Loader[data.matrix_loader]
     GUI[GUI Tkinter] --> Controller[Worker / queue / dispatcher]
     GUI --> Loader
-    Controller --> Solver
+    Controller --> GASolver[algorithms.ga.solve]
     Loader --> Problem[domain.TSPProblem]
-    CLI --> Solver[algorithms.ga.solve]
-    Solver --> Problem
-    Solver --> Result[domain.RunResult]
-    Bench[experiments.benchmark] --> Solver
+    CLI --> GASolver
+    Bench[experiments.benchmark] --> GASolver
+    GASolver --> Problem
+    GASolver --> Result[domain.RunResult]
+    EHOCore[algorithms.eho.solve - core chưa tích hợp] --> Problem
     Result --> Export[JSON / CSV / Markdown / notebook plots]
 ```
 
-Domain chỉ dùng stdlib, không import loader/algorithm/GUI. Loader và GA phụ thuộc domain. CLI/notebook/benchmark gọi public API; không đọc hoặc sửa population. Benchmark/export là code chương trình thật, được giữ. Không có runtime dependency tới tests, report cũ, notebook gốc hoặc archive ngoài repository. Notebook không chỉnh sys.path; cần editable installation.
+Domain chỉ dùng stdlib, không import loader/algorithm/GUI. Loader và cả hai solver phụ thuộc domain. CLI/notebook/benchmark hiện chưa tích hợp solver EHO; khi tích hợp, chúng phải gọi public API và không đọc hoặc sửa population. Benchmark/export là code chương trình thật, được giữ. Không có runtime dependency tới tests, report cũ, notebook gốc hoặc archive ngoài repository. Notebook không chỉnh sys.path; cần editable installation.
 
 ## Public API
 
@@ -29,6 +30,7 @@ Domain chỉ dùng stdlib, không import loader/algorithm/GUI. Loader và GA ph�
 | domain.objective.validate_route | sequence,n → None hoặc ValueError |
 | domain.operators.random_permutation | n,random.Random → Route khóa0 |
 | algorithms.ga.solve | problem,GAConfig,progress_callback/stop_requested → RunResult |
+| algorithms.eho.solve | problem,EHOConfig,progress_callback/stop_requested → RunResult; core tồn tại, chưa đăng ký consumer |
 | domain.protocols.Solver[Config] | protocol dùng được với GAConfig/EHOConfig |
 | experiments.benchmark.benchmark | config path → summary; xuất raw/structured results |
 
