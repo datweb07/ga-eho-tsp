@@ -1,6 +1,6 @@
 # Bàn giao GA cho nhóm EHO
 
-Owner shared domain/GA: **Trương Thành Đạt**. GA P1/P2 và GUI hiện có. EHO core đã có `solver.py`, `discrete_ops.py` và `separation.py`, nhưng chưa hoàn thiện thiết kế clan/medoid, chưa thống nhất đường cập nhật của solver, và chưa tích hợp CLI/GUI. Xem [thiết kế Discrete EHO](algorithm_eho.md). Không import GA private internals hoặc đổi shared schema để thích nghi với form.
+Owner shared domain/GA: **Trương Thành Đạt**. GA P1/P2 và GUI hiện có. EHO core có `clans.py`, `solver.py`, `discrete_ops.py` và `separation.py`; clan/medoid đã được triển khai, còn solver chưa dùng cấu trúc và quy tắc cập nhật đã thiết kế. EHO cũng chưa tích hợp CLI/GUI. Xem [thiết kế Discrete EHO](algorithm_eho.md). Không import GA private internals hoặc đổi shared schema để thích nghi với form.
 
 ## API cần dùng
 
@@ -26,7 +26,7 @@ from ga_eho_tsp.domain.protocols import Solver
 | Result | RunResult: algorithm, problem_name, best_route, best_distance, iterations_completed, evaluations, elapsed_seconds, seed, history, config_snapshot, stopping_reason, is_valid, metadata |
 | Progress | Frozen IterationStat(iteration,best_current,best_so_far,mean_fitness,evaluations,elapsed_seconds,population_diversity=None) |
 
-EHOConfig default 4 clans × 20 elephants, iterations 250/max_iterations 250, alpha 0.7/beta 0.3/separation 1, random initialization, preserve_global_best=True. Population property=clans×elephants. Có core solver nhưng chưa được đăng ký vào GUI/CLI; mã cần được kiểm tra/refactor theo [thiết kế Discrete EHO](algorithm_eho.md). GAConfig có các options riêng của GA, không dùng nó để thay EHOConfig.
+EHOConfig default 4 clans × 20 elephants, iterations 250/max_iterations 250, alpha 0.7/beta 0.3/separation 1, random initialization, preserve_global_best=True. Population property=clans×elephants. Core solver chưa được đăng ký vào GUI/CLI và cần được refactor theo [thiết kế Discrete EHO](algorithm_eho.md). GAConfig có các options riêng của GA, không dùng nó để thay EHOConfig.
 
 ## Stop, history và evaluation accounting
 
@@ -46,7 +46,7 @@ Elapsed đo perf_counter trong solver; không bao loader/GUI/export. Cùng datas
 
 Sau khi EHO solver được review:
 
-1. Hoàn thiện `clans.py`, refactor solver để tuân [thiết kế Discrete EHO](algorithm_eho.md), và thêm/khôi phục tests correctness trước integration.
+1. Review `clans.py`, refactor solver để dùng Clan/medoid theo [thiết kế Discrete EHO](algorithm_eho.md), và thêm/khôi phục tests correctness trước integration.
 2. Sau review core, thêm import/register public EHO solve trong ALGORITHMS, giữ config_type EHOConfig. Không sửa GA registry thành alias EHO.
 3. Thêm EHO form/preset riêng trong controls và chọn form theo algorithm trong app.start_run. Hiện app chỉ dựng ConfigForm GA; không được bật EHO bằng cách truyền GAConfig hoặc đổi config_type. Chỉ bước này và registration cần sửa UI, không sửa GA/domain.
 4. Worker/queue/Stop, result/export, renderer tour/convergence dùng chung ngay khi EHO trả đúng contract. Không cần fake progress, coordinates hoặc history để lấp UI.
@@ -57,11 +57,11 @@ Sau khi EHO solver được review:
 
 | Thành viên | File/phạm vi được triển khai |
 |---|---|
-| EHO1 | Hoàn thiện algorithms/eho/clans.py và refactor solver.py theo docs/algorithm_eho.md |
+| EHO1 | Review algorithms/eho/clans.py và refactor solver.py theo docs/algorithm_eho.md |
 | EHO2 | Review discrete_ops.py, separation.py; khôi phục/bổ sung permutation, medoid, guided update, separation tests |
 | EHO3 | EHO form/registration trong gui sau solver review; configs/experiments EHO, CLI integration qua PR leader review |
 | Leader | Review shared contract, GA ownership, nghiệm thu tích hợp/benchmark |
 
 Không tự sửa domain/*, algorithms/ga/*, matrix hoặc GUIDELINES. Thay đổi contract cần proposal có input tái hiện/tác động/tests và leader duyệt. Các tên thành viên chưa xác nhận vẫn là EHO1/2/3, không tự điền người thật.
 
-Ưu tiên kế tiếp: review thiết kế Discrete EHO, khôi phục regression suite từ backup (repo đã bỏ tests theo yêu cầu cleanup), hoàn thiện clans/medoid và nối solver với operators → correctness/stop/budget → CLI/GUI → benchmark. Chưa có TSPLIB loader; dataset provenance/licensing và optimum bài lớn vẫn chưa xác minh đầy đủ. MIT không cấp lại quyền với dữ liệu/legacy chưa rõ giấy phép. Không có blocker buộc sửa shared schema để bắt đầu EHO.
+Ưu tiên kế tiếp: review `clans.py`, khôi phục regression suite từ backup (repo đã bỏ tests theo yêu cầu cleanup), nối solver với clan/medoid và operators → correctness/stop/budget → CLI/GUI → benchmark. Chưa có TSPLIB loader; dataset provenance/licensing và optimum bài lớn vẫn chưa xác minh đầy đủ. MIT không cấp lại quyền với dữ liệu/legacy chưa rõ giấy phép. Không có blocker buộc sửa shared schema để bắt đầu EHO.

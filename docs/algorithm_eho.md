@@ -27,7 +27,7 @@ class Clan:
     costs: tuple[float, ...]
 ```
 
-Invariant: clan không rỗng; `len(members) == len(costs)`; mọi route hợp lệ và mọi cost hữu hạn, không âm. Các helper trả index, không làm thay đổi clan tại chỗ. Việc tạo generation kế tiếp tạo `Clan` mới để routes và costs không thể lệch nhau khi thay voi.
+Invariant: clan không rỗng; `len(members) == len(costs)`; mọi route hợp lệ và mọi cost hữu hạn, không âm. `Clan.best_index()`, `Clan.worst_indices(count, protected_indices=())`, `Clan.center_index()` và `Clan.center()` trả kết quả xác định, không làm thay đổi clan tại chỗ. Việc tạo generation kế tiếp tạo `Clan` mới để routes và costs không thể lệch nhau khi thay voi.
 
 Không có trung bình số học tự nhiên của các permutation. Tâm clan vì vậy là **medoid**: route trong chính clan có tổng khoảng cách Hamming nhỏ nhất tới các route còn lại. Hamming distance chỉ xét vị trí `1..n-1`, giữ city `0` cố định như `discrete_ops.hamming_distance`.
 
@@ -82,7 +82,7 @@ solve(problem, config, *, progress_callback=None, stop_requested=None) -> RunRes
 
 ## Cấu trúc hiện tại và phần còn lại
 
-Đã có `discrete_ops.py`, `separation.py`, `solver.py` và package export. `solver.py` hiện có vòng lặp và hợp đồng kết quả, nhưng lưu clan bằng nested lists, chưa có medoid helper, và tự dùng `_move_toward` cùng hai bước hút alpha-clan-best/beta-global-best. Do đó code hiện tại chưa khớp thiết kế ở trên: cần thêm `clans.py`, dùng beta hướng về medoid, và nối solver với các toán tử đã tách.
+Đã có `clans.py`, `discrete_ops.py`, `separation.py`, `solver.py` và package export. `Clan` hiện giữ members/costs bất biến và tính medoid theo thiết kế. `solver.py` chưa dùng `Clan`: nó vẫn lưu nested lists, tự dùng `_move_toward`, và áp dụng alpha-clan-best/beta-global-best. Phần còn lại là nối solver với `Clan`, dùng beta hướng về medoid, và gọi các toán tử đã tách.
 
 CLI/benchmark/GUI registration không thuộc thiết kế core này; EHO chưa được tích hợp làm lựa chọn chạy chính thức trong các consumer đó.
 
