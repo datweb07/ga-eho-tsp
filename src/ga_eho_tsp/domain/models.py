@@ -150,7 +150,7 @@ class EHOConfig(RunConfigBase):
         integer("clan_count", self.clan_count, 2)
         integer("elephants_per_clan", self.elephants_per_clan, 3)
         integer("iterations", self.iterations)
-        integer("separation_count_per_clan", self.separation_count_per_clan)
+        integer("separation_count_per_clan", self.separation_count_per_clan, 0)
         probability("alpha", self.alpha)
         probability("beta", self.beta)
         if self.separation_count_per_clan >= self.elephants_per_clan:
