@@ -8,11 +8,11 @@ EHO liên tục cập nhật vector bằng phép nhân/cộng tọa độ, trong
 
 Mỗi generation gồm các bước:
 
-1. Từ clan hiện tại, chọn voi dẫn đầu có chi phí thấp nhất và chọn các index separation có chi phí cao nhất. Đây là vai trò của generation kế tiếp; không xếp hạng lại sau khi đã cập nhật candidate.
+1. Từ clan hiện tại, chọn matriarch được giữ trong archive tốt nhất của clan và chọn các index separation có chi phí cao nhất. Vai trò separation được xác định từ generation cha và không xếp hạng lại sau khi tạo candidate.
 2. Tính tâm clan theo định nghĩa medoid bên dưới, chỉ từ clan hiện tại.
 3. Tạo generation mới đồng bộ: voi dẫn đầu đi về tâm clan theo `beta`; các voi thường đi về voi dẫn đầu theo `alpha`; các index separation nhận route ngẫu nhiên mới.
 4. Đánh giá từng candidate bằng `problem.route_length(route)` đúng một lần.
-5. Cập nhật archive best-so-far từ mọi route đã đánh giá. Sau generation hoàn chỉnh, giữ archive trong population theo `preserve_global_best` của config.
+5. Cập nhật archive best-so-far toàn cục và archive matriarch riêng của clan từ mọi route đã đánh giá. Sau generation hoàn chỉnh, giữ matriarch tốt nhất từng đạt được trong từng clan; archive toàn cục được giữ trong clan sở hữu nó, chỉ đưa vào clan đầu nếu vì lý do nào đó chưa có trong quần thể.
 
 Nếu voi dẫn đầu đồng thời là voi tệ nhất (ví dụ mọi chi phí bằng nhau), voi dẫn đầu được bảo vệ; separation chọn các voi tệ tiếp theo. Tie-break theo chi phí giảm dần rồi index tăng dần. Đây là điều chỉnh để không áp dụng hai vai trò xung đột lên cùng một thành viên trong cùng generation.
 
@@ -82,18 +82,18 @@ solve(problem, config, *, progress_callback=None, stop_requested=None) -> RunRes
 
 ## Cấu trúc hiện tại và phần còn lại
 
-`clans.py`, `discrete_ops.py`, `separation.py` và `solver.py` hiện được nối theo thiết kế: solver dùng `Clan`, beta hướng về medoid, alpha hướng về matriarch, và separation bảo vệ matriarch. Cần review và chạy regression suite trước khi xem core đã nghiệm thu. CLI/benchmark/GUI registration chưa tích hợp.
+`clans.py`, `discrete_ops.py`, `separation.py` và `solver.py` được nối thành solver EHO rời rạc: beta hướng matriarch về medoid, alpha hướng voi thường về matriarch, separation bảo vệ matriarch và archive từng clan giữ lại leader tốt nhất của clan. Archive toàn cục vẫn được trả về trong `RunResult`. Đây là thiết kế thích nghi cho hoán vị TSP, không phải phép biến đổi đại số tương đương EHO trên vector liên tục.
 
-CLI/benchmark/GUI registration không thuộc thiết kế core này; EHO chưa được tích hợp làm lựa chọn chạy chính thức trong các consumer đó.
+CLI, benchmark và GUI hiện đều đăng ký EHO. GUI cung cấp form EHO riêng; benchmark dùng chung loader/objective với GA để có thể so sánh trong cùng budget và seed. Muốn tuyên bố thuật toán đã được nghiệm thu đầy đủ vẫn cần chạy regression suite và benchmark đối chứng GA–EHO.
 
-## Kiểm tra nghiệm thu cho bước triển khai
+## Kiểm tra correctness và giới hạn còn lại
 
-Khi triển khai, khôi phục hoặc bổ sung regression tests cho các nhóm sau:
+Để nghiệm thu core sau các thay đổi, cần chạy regression tests cho các nhóm sau:
 
 1. Clan giữ đồng bộ member/cost; best/worst tie-break xác định; medoid đúng với tính tay và luôn là member hợp lệ.
 2. Guided swap giữ permutation, cố định city `0`, không tăng Hamming distance tới target, có biên strength `0/1`, và không sửa input.
 3. Separation thay đúng số member tệ nhất, giữ clan size và đồng bộ cost khi solver đánh giá replacement.
-4. Solver dùng đúng `move_toward_best`, `update_matriarch`, `separate`; cùng seed cho route/history/counters giống nhau.
+4. Solver dùng đúng `move_toward_best`, `update_matriarch`, `separate`; lưu matriarch tốt nhất theo clan; cùng seed cho route/history/counters giống nhau.
 5. Objective cost khớp tính độc lập; evaluation count, generation cap, budget, timeout/cancel, partial iteration, history và archive best tuân shared architecture.
 6. Chạy cases `3, 4, 6, 15, 26, 42, 48` thành phố; kiểm tra route hợp lệ ở mọi snapshot/result.
 

@@ -35,6 +35,20 @@ def _preserve_global_best(
     return clans
 
 
+def _preserve_clan_best(clan: Clan, best_route: Route, best_distance: float) -> Clan:
+    """Giữ matriarch tốt nhất clan từng đạt được qua các thế hệ."""
+    if best_route in clan.members:
+        return clan
+
+    leader_index = clan.best_index()
+    replacement_index = clan.worst_indices(1, protected_indices=(leader_index,))[0]
+    members = list(clan.members)
+    costs = list(clan.costs)
+    members[replacement_index] = best_route
+    costs[replacement_index] = best_distance
+    return Clan(tuple(members), tuple(costs))
+
+
 def solve(
     problem: TSPProblem,
     config: EHOConfig,
@@ -63,6 +77,11 @@ def solve(
         )
         costs = tuple(problem.route_length(route) for route in members)
         clans.append(Clan(members, costs))
+
+    # Mỗi clan giữ archive matriarch riêng. Chỉ archive toàn cục là chưa đủ:
+    # nếu clan mất route tốt nhất của chính nó, alpha sẽ bị kéo về leader kém hơn.
+    clan_best_routes = [clan.members[clan.best_index()] for clan in clans]
+    clan_best_costs = [clan.costs[clan.best_index()] for clan in clans]
 
     evaluations = config.population_size
     initial_candidates = [
@@ -114,7 +133,10 @@ def solve(
         next_clans: list[Clan] = []
         partial_iteration = False
 
-        for clan in clans:
+        next_clan_best_routes = list(clan_best_routes)
+        next_clan_best_costs = list(clan_best_costs)
+
+        for clan_index, clan in enumerate(clans):
             leader_index = clan.best_index()
             leader = clan.members[leader_index]
             center = clan.center()
@@ -153,19 +175,35 @@ def solve(
                 evaluations += 1
                 if cost < best_distance:
                     best_route, best_distance = candidate, cost
+                if cost < next_clan_best_costs[clan_index]:
+                    next_clan_best_routes[clan_index] = candidate
+                    next_clan_best_costs[clan_index] = cost
                 next_members.append(candidate)
                 next_costs.append(cost)
 
             if partial_iteration:
                 break
-            next_clans.append(Clan(tuple(next_members), tuple(next_costs)))
+            next_clan = Clan(tuple(next_members), tuple(next_costs))
+            if config.preserve_global_best:
+                next_clan = _preserve_clan_best(
+                    next_clan,
+                    next_clan_best_routes[clan_index],
+                    next_clan_best_costs[clan_index],
+                )
+            next_clans.append(next_clan)
 
         if partial_iteration:
             break
 
         clans = next_clans
+        clan_best_routes = next_clan_best_routes
+        clan_best_costs = next_clan_best_costs
         if config.preserve_global_best:
-            clans = _preserve_global_best(clans, best_route, best_distance)
+            # Per-clan archives retain the global best in its owning clan.
+            # Inject into clan 0 only as a defensive fallback; duplicating it
+            # across clans every generation would unnecessarily reduce diversity.
+            if not any(best_route in clan.members for clan in clans):
+                clans = _preserve_global_best(clans, best_route, best_distance)
 
         completed = iteration
         if iteration % config.record_history_every == 0:
@@ -196,5 +234,6 @@ def solve(
             "initialization_atomic": True,
             "population_diversity": None,
             "clan_center": "hamming_medoid",
+            "clan_best_archive": True,
         },
     )

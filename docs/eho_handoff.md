@@ -1,6 +1,6 @@
-# Bàn giao GA cho nhóm EHO
+# Bàn giao EHO rời rạc cho TSP
 
-Owner shared domain/GA: **Trương Thành Đạt**. GA P1/P2 và GUI hiện có. EHO core có `clans.py`, `solver.py`, `discrete_ops.py` và `separation.py`; solver đã được nối với clan/medoid và toán tử rời rạc, nhưng chưa được nghiệm thu bằng regression suite hoặc tích hợp CLI/GUI. Xem [thiết kế Discrete EHO](algorithm_eho.md). Không import GA private internals hoặc đổi shared schema để thích nghi với form.
+Owner shared domain/GA: **Trương Thành Đạt**. EHO rời rạc cho TSP có `clans.py`, `solver.py`, `discrete_ops.py` và `separation.py`; mỗi clan giữ archive matriarch tốt nhất, tâm dùng medoid và các di chuyển giữ permutation hợp lệ. Solver đã được đăng ký trong CLI, benchmark và GUI. Xem [thiết kế Discrete EHO](algorithm_eho.md). EHO là biến thể rời rạc, không phải bản sao đại số của EHO liên tục.
 
 ## API cần dùng
 
@@ -26,7 +26,7 @@ from ga_eho_tsp.domain.protocols import Solver
 | Result | RunResult: algorithm, problem_name, best_route, best_distance, iterations_completed, evaluations, elapsed_seconds, seed, history, config_snapshot, stopping_reason, is_valid, metadata |
 | Progress | Frozen IterationStat(iteration,best_current,best_so_far,mean_fitness,evaluations,elapsed_seconds,population_diversity=None) |
 
-EHOConfig default 4 clans × 20 elephants, iterations 250/max_iterations 250, alpha 0.7/beta 0.3/separation 1, random initialization, preserve_global_best=True. Population property=clans×elephants. Core solver chưa được đăng ký vào GUI/CLI và cần regression review theo [thiết kế Discrete EHO](algorithm_eho.md). GAConfig có các options riêng của GA, không dùng nó để thay EHOConfig.
+EHOConfig default 4 clans × 20 elephants, iterations 250/max_iterations 250, alpha 0.7/beta 0.3/separation 1, random initialization, preserve_global_best=True. Population property=clans×elephants. Solver được gọi qua CLI/GUI bằng `EHOConfig`; cần chạy regression review theo [thiết kế Discrete EHO](algorithm_eho.md). GAConfig có các options riêng của GA, không dùng nó để thay EHOConfig.
 
 ## Stop, history và evaluation accounting
 
@@ -36,32 +36,21 @@ EHOConfig default 4 clans × 20 elephants, iterations 250/max_iterations 250, al
 
 Đếm mỗi full objective call một lần, kể cả route trùng và separation/rejected candidates. Những lookups/operator work không phải full evaluations vẫn nằm trong runtime. Không cộng kiểm chứng độc lập sau run vào evaluations của solver. CLI benchmark kiểm lại route/cost bên ngoài solver.
 
-Archive global-best cập nhật sau mỗi candidate, không lấy best chỉ ở quần thể cuối. iterations_completed chỉ đếm vòng hoàn tất. Với partial iteration, giữ best của candidate đã evaluate, history cuối có evaluations thực và metadata.partial_iteration. History có thể có hai snapshot cùng iteration nhưng evaluations khác; best_current/mean/diversity chỉ từ population commit. Luôn có snapshot0/final; best_so_far không tăng. Nếu EHO không có diversity cùng định nghĩa, để None và ghi rõ.
+Archive best toàn cục cập nhật sau mỗi candidate, không lấy best chỉ ở quần thể cuối. Archive matriarch từng clan cũng cập nhật sau mỗi candidate nhưng chỉ được commit khi generation đầy đủ; partial iteration không làm thay đổi clan đang chạy. `iterations_completed` chỉ đếm vòng hoàn tất. Với partial iteration, giữ best của candidate đã evaluate, history cuối có evaluations thực và `metadata.partial_iteration`. History có thể có hai snapshot cùng iteration nhưng evaluations khác; `best_current`/mean chỉ từ population đã commit. Luôn có snapshot 0/final; `best_so_far` không tăng. EHO chưa tính population diversity nên trường này để `None`.
 
 Elapsed đo perf_counter trong solver; không bao loader/GUI/export. Cùng dataset/config/seed/version cho numeric history/route/cost tái lập, trừ time/cancel nondeterministic. GA callback có throttle ở adapter để không bắt solver redraw; result.history vẫn đầy đủ. Xem [architecture.md](architecture.md) về semantics chính xác hiện tại.
 
 ## Điểm tích hợp GUI
 
-`algorithms/eho/solver.py` tồn tại nhưng `gui/controller.py` chưa đăng ký solver EHO và Run cho EHO vẫn bị khóa. `RunController` không import Tk và không biết GA private state; worker chỉ gọi common solve signature.
+`gui/controller.py` đăng ký `eho_solve` cùng `EHOConfig`; `gui/app.py` chọn form EHO khi người dùng chọn thuật toán EHO. Worker gọi solver qua common interface, progress/stop/result dùng contract chung. GA và EHO chạy riêng từng lượt, chưa phải solver lai.
 
-Sau khi EHO solver được review:
+## Kiểm tra còn cần hoàn tất
 
-1. Review `clans.py`, refactor solver để dùng Clan/medoid theo [thiết kế Discrete EHO](algorithm_eho.md), và thêm/khôi phục tests correctness trước integration.
-2. Sau review core, thêm import/register public EHO solve trong ALGORITHMS, giữ config_type EHOConfig. Không sửa GA registry thành alias EHO.
-3. Thêm EHO form/preset riêng trong controls và chọn form theo algorithm trong app.start_run. Hiện app chỉ dựng ConfigForm GA; không được bật EHO bằng cách truyền GAConfig hoặc đổi config_type. Chỉ bước này và registration cần sửa UI, không sửa GA/domain.
-4. Worker/queue/Stop, result/export, renderer tour/convergence dùng chung ngay khi EHO trả đúng contract. Không cần fake progress, coordinates hoặc history để lấp UI.
-5. Bổ sung CLI/benchmark EHO thật sau tests; hiện CLI vẫn từ chối EHO. So cùng dữ liệu/objective/seeds/evaluation budgets và báo runtime/separation accounting thực.
-6. Chạy lại gates, GUI Run/Stop/close/export, cùng seed reproducibility, objective cost, history/partial, 3/4/6/15/26/42/48city; EHO GUI–CLI exact numeric comparison. Không nghiệm thu chỉ vì form mở được.
-
-## Ownership và công việc tiếp theo
-
-| Thành viên | File/phạm vi được triển khai |
+| Hạng mục | Trạng thái |
 |---|---|
-| EHO1 | Review clans.py và solver.py theo docs/algorithm_eho.md; xử lý core findings |
-| EHO2 | Review discrete_ops.py, separation.py; khôi phục/bổ sung permutation, medoid, guided update, separation tests |
-| EHO3 | EHO form/registration trong gui sau solver review; configs/experiments EHO, CLI integration qua PR leader review |
-| Leader | Review shared contract, GA ownership, nghiệm thu tích hợp/benchmark |
+| Package EHO rời rạc và tích hợp CLI/GUI | Đã có trong source |
+| Route hợp lệ và cost khớp objective trên 7 dataset | Đã smoke-check; cần regression suite tái lập |
+| Pytest regression suite | Test files có trong repo; cần chạy trong môi trường cài pytest |
+| Benchmark đối chứng GA–EHO | Chưa có batch paired cùng config/seed/budget |
 
-Không tự sửa domain/*, algorithms/ga/*, matrix hoặc GUIDELINES. Thay đổi contract cần proposal có input tái hiện/tác động/tests và leader duyệt. Các tên thành viên chưa xác nhận vẫn là EHO1/2/3, không tự điền người thật.
-
-Ưu tiên kế tiếp: khôi phục regression suite từ backup (repo đã bỏ tests theo yêu cầu cleanup), kiểm chứng core theo thiết kế, rồi tích hợp CLI/GUI → benchmark. Chưa có TSPLIB loader; dataset provenance/licensing và optimum bài lớn vẫn chưa xác minh đầy đủ. MIT không cấp lại quyền với dữ liệu/legacy chưa rõ giấy phép. Không có blocker buộc sửa shared schema để bắt đầu EHO.
+Các benchmark độc lập không đủ để kết luận thuật toán nào tốt hơn. Cần dùng cùng dữ liệu, seed, objective-evaluation budget và môi trường. Chưa có TSPLIB loader; dataset provenance/licensing và optimum bài lớn vẫn cần xác minh.
