@@ -1,36 +1,33 @@
-# Nội dung báo cáo đồ án - phần Genetic Algorithm cho TSP
+# Nội dung báo cáo đồ án - Genetic Algorithm và Discrete EHO cho TSP
 
-> **Phạm vi tài liệu:** Đây là bản nội dung báo cáo cho phần Genetic Algorithm (GA), được viết theo cấu trúc chương trong file PDF mẫu `AI FINAL PROJECT.pdf`. PDF hiện có tiêu đề đúng với đề tài GA–EHO–TSP, nhưng mục lục và các tiêu đề nội dung bên trong vẫn ghi Tic Tac Toe, còn phần chương và tài liệu tham khảo để trống. Vì vậy, tài liệu này dùng cấu trúc chương làm khung trình bày, thay nội dung Tic Tac Toe bằng bài toán TSP theo đề tài của repository, và không coi nội dung mẫu sai chủ đề là yêu cầu thay đổi đề tài. Tài liệu chỉ trình bày GA; EHO được ghi nhận là chưa có solver.
+> **Phạm vi tài liệu:** Trình bày mô hình TSP, hai solver GA và Discrete EHO (D-EHO), cách triển khai, thí nghiệm, kết quả và giới hạn. GA và EHO là hai thuật toán độc lập; chương trình chưa kết hợp chúng thành một thuật toán lai.
 
-> **Rà soát gần nhất:** 2026-11-19. Toàn bộ source, notebook và dữ liệu đã được xác minh theo checklist bên dưới. Trạng thái: ✅ GA hoàn chỉnh — ⏳ EHO chưa triển khai.
+> **Rà soát gần nhất:** 2026-11-23, source commit `4cb9947`. Benchmark được chạy lại cho GA và EHO: mỗi thuật toán có 35 lần chạy trên 7 bộ dữ liệu × 5 seed, tối đa 6.000 objective evaluations/run; 35/35 lượt của mỗi thuật toán trả kết quả hợp lệ. `compileall` thành công; pytest chưa chạy được vì môi trường `.venv` không có module `pytest`.
 
 ---
 
-## ✅ Checklist nghiệm thu GA (2026-11-19)
+## Trạng thái triển khai và kiểm tra
 
 | Hạng mục | Trạng thái | Ghi chú |
 |---|---|---|
-| Package `algorithms/ga/` | ✅ Đầy đủ | solver, crossover, mutation, selection, initialization, local_search, monitoring, survivor |
-| Shared domain (`domain/`) | ✅ Đầy đủ | models, objective, protocols, operators |
-| Data loader | ✅ | 7 datasets validate pass |
-| CLI: validate, solve, benchmark | ✅ | Encode UTF-8 cần thiết lập trên Windows |
-| GUI: GA form + runner | ✅ | EHO entry khóa đúng |
-| Notebook 1-2 (operators) | ✅ Run All pass | Quick mode 5 seeds |
-| Notebook 3 (distribution) | ✅ Run All pass | 6 datasets |
-| Notebook 4 (challenging) | ✅ Run All pass | NN/mixed/2-opt variants |
-| Benchmark 35 runs | ✅ | 7 datasets × 5 seeds, 6000 eval/run |
-| `pytest -q` suite | ⚠️ Không có file test | 166 tests backup ngoài repo; cần khôi phục |
-| EHO solver | ❌ Chưa implement | Schema/handoff có sẵn, solver=None |
+| GA package | ✅ | Solver, initialization, selection, crossover, mutation, local search, monitoring và survivor |
+| EHO package | ✅ | Clan, Hamming medoid, guided-swap, separation và archive theo clan/toàn cục |
+| Shared domain và data loader | ✅ | Dùng chung TSP objective; 7 ma trận dữ liệu |
+| CLI và benchmark | ✅ | Hỗ trợ chạy GA/EHO và benchmark nhiều seed |
+| GUI | ✅ | Chọn GA hoặc EHO, mỗi lần chạy dùng một solver |
+| GA benchmark | ✅ | 35/35 lượt hợp lệ, 6.000 evaluations/run |
+| EHO benchmark | ✅ | 35/35 lượt hợp lệ, 6.000 evaluations/run |
+| `pytest -q` | ⚠️ Chưa chạy | Project `.venv` thiếu `pytest`; không báo suite pass |
 
 ## Đề tài
 
 **Ứng dụng thuật toán Genetic Algorithm và Elephant Herding Optimization cho bài toán người du lịch (Traveling Salesman Problem - TSP)**
 
-### Phạm vi phần GA
+### Phạm vi thuật toán
 
-Phần này trình bày mô hình TSP, cách biểu diễn một hành trình, thuật toán GA được cài đặt trong repository, các kết quả thực nghiệm đã được ghi nhận và giới hạn hiện tại. Tên đề tài chung vẫn bao gồm cả GA và EHO theo phạm vi đồ án. Tuy nhiên, nội dung dưới đây chỉ mô tả GA để có thể hoàn thiện trước; không mô tả D-EHO như một thuật toán đã triển khai hoặc đã thử nghiệm.
+GA và D-EHO dùng chung biểu diễn route, hàm mục tiêu và cơ chế đánh giá nhưng giữ hai vòng lặp solver riêng. Nội dung dưới đây mô tả implementation hiện tại và không xem hai thuật toán là một solver lai.
 
-GA chính thức nằm trong package `src/ga_eho_tsp/algorithms/ga/` và dùng chung mô hình bài toán ở `src/ga_eho_tsp/domain/`. Đầu mối sở hữu domain và GA là Trương Thành Đạt. Những thay đổi đối với hợp đồng dữ liệu chung cần được đề xuất và leader xem xét trước khi thực hiện.
+GA nằm trong `src/ga_eho_tsp/algorithms/ga/`, D-EHO nằm trong `src/ga_eho_tsp/algorithms/eho/`, và cả hai dùng mô hình chung ở `src/ga_eho_tsp/domain/`.
 
 # CHƯƠNG 1. TỔNG QUAN
 
@@ -60,6 +57,8 @@ Ma trận đầu vào được kiểm tra là ma trận vuông có ít nhất ba
 GA mô phỏng quá trình tiến hóa để tìm kiếm nghiệm tốt. Thay vì chỉ duy trì một hành trình, thuật toán giữ một quần thể gồm nhiều hành trình. Mỗi vòng lặp chọn các hành trình cha, kết hợp một phần thứ tự của chúng để tạo hành trình con, áp dụng đột biến để thay đổi một đoạn, sau đó hình thành quần thể kế tiếp.
 
 Trong đồ án, một cá thể chính là một route hợp lệ của TSP. Chất lượng của cá thể được đo trực tiếp bằng tổng độ dài hành trình. Vì bài toán cần tối thiểu hóa, route có tổng chi phí nhỏ hơn được xem là tốt hơn. Cùng một hàm mục tiêu `TSPProblem.route_length` được dùng trong toàn bộ GA; route không có một công thức fitness riêng khác với công thức dùng để báo cáo kết quả.
+
+EHO cũng được áp dụng cho cùng bài toán, nhưng lời giải TSP là hoán vị chứ không phải vector số thực. Vì vậy implementation dùng Discrete EHO (D-EHO): giữ cấu trúc clan và các vai trò của EHO, đồng thời thay phép cập nhật tọa độ bằng toán tử trên hoán vị. Hai solver dùng chung objective nhưng vận hành độc lập.
 
 GA là phương pháp tìm kiếm ngẫu nhiên có định hướng, nên một lần chạy không đảm bảo tìm được optimum toàn cục. Seed được truyền rõ ràng để có thể lặp lại cùng một cấu hình. Kết quả thí nghiệm vì vậy cần được đọc cùng số seed, số lần đánh giá hàm mục tiêu, thời gian chạy và cách chọn cấu hình, thay vì chỉ nhìn vào một route tốt nhất.
 
@@ -186,25 +185,179 @@ GA có thêm một số lựa chọn ngoài đường mặc định:
 | `algorithms/ga/monitoring.py` | Diversity và mutation rate thích nghi |
 | `algorithms/ga/local_search.py` | Bounded 2-opt opt-in |
 | `algorithms/ga/solver.py` | Vòng lặp GA, global best, history, stop và kết quả |
-| `cli.py` | Lệnh validate, solve GA và benchmark nhiều seed |
+| `algorithms/eho/clans.py` | Clan, xếp hạng member và Hamming medoid |
+| `algorithms/eho/discrete_ops.py` | Hamming distance, guided-swap, alpha/beta update |
+| `algorithms/eho/separation.py` | Separation bằng permutation mới hợp lệ |
+| `algorithms/eho/solver.py` | Vòng lặp D-EHO, archive theo clan/toàn cục, stop và kết quả |
+| `cli.py` | Lệnh validate, solve GA/EHO và benchmark nhiều seed |
 | `experiments/benchmark.py` | Chạy lặp, kiểm tra kết quả và xuất summary/CSV/JSON |
-| `gui/` | Form Tkinter, điều phối solver ở worker và biểu diễn kết quả GA |
+| `gui/` | Form Tkinter, chọn GA/EHO và điều phối solver trong worker |
 
-Không tồn tại package `algorithms/eho/` có solver trong source hiện tại. `EHOConfig` trong domain và một mục EHO bị khóa ở registry GUI chỉ là schema/điểm handoff, không phải EHO đã cài đặt. CLI cũng từ chối `--algorithm eho` thay vì trả kết quả giả.
+GA và EHO dùng chung `TSPProblem`, objective và `RunResult`; các module EHO không gọi nội bộ GA. Giao diện cho phép chọn một solver cho mỗi lần chạy, chưa có thuật toán kết hợp GA–EHO.
 
-# CHƯƠNG 3. CÁC KẾT QUẢ THỰC NGHIỆM
+# CHƯƠNG 3. THUẬT TOÁN ELEPHANT HERDING OPTIMIZATION
 
-## 3.1. Thiết kế thí nghiệm và các tình huống
+## 3.1. Tổng quan về Elephant Herding Optimization
 
-Repository có bảy ma trận dữ liệu 3, 4, 6, 15, 26, 42 và 48 thành phố. Theo tài liệu nghiệm thu trong `docs/experiments.md`, benchmark mẫu sử dụng cấu hình population size 80, giới hạn 6.000 objective evaluations cho mỗi lần chạy và năm seed `[11, 23, 37, 53, 71]`. Tổng cộng có 35 lần chạy: bảy bộ dữ liệu nhân với năm seed. Tất cả lần chạy benchmark đó được báo cáo là hoàn tất hợp lệ trong bản ghi nghiệm thu.
+Elephant Herding Optimization (EHO) là thuật toán quần thể lấy cảm hứng từ hành vi sống theo đàn của voi. Quần thể được chia thành các clan; mỗi clan có một matriarch dẫn dắt, các voi thường cập nhật lời giải theo matriarch, và một số voi có chi phí cao nhất được separation để duy trì khám phá.
 
-Các thí nghiệm notebook được chia thành ba nhóm. Nhóm thứ nhất so sánh selection, crossover, mutation và một số thay đổi tham số trên bài 15 thành phố. Nhóm thứ hai khảo sát phân bố kết quả và độ ổn định trên các bài có kích thước khác nhau, đồng thời dùng exhaustive enumeration chỉ để kiểm tra các trường hợp nhỏ. Nhóm thứ ba so sánh random initialization với nearest-neighbor/mixed, PMX, adaptive mutation và GA kết hợp 2-opt trên các bài 15, 26, 42 và 48 thành phố.
+### 3.1.1. Khái niệm và nguyên lý
 
-Các phép so sánh cần dùng cùng dataset, seed set, cấu hình liên quan và số evaluation tương đương. Khi chỉ cố định số generation mà population thay đổi, số objective evaluations cũng thay đổi; vì vậy hai kiểu so sánh này không thể được đánh đồng. Runtime được ghi lại để mô tả chi phí thực tế nhưng có thể biến động theo máy và môi trường. Tên file dataset không được dùng làm optimum nếu chưa có nguồn kiểm chứng.
+Trong EHO liên tục, vị trí voi thường được cập nhật theo matriarch:
 
-## 3.2. Kết quả so sánh operator trên bài 15 thành phố
+```text
+p[i,c]^(t+1) = p[i,c]^t + alpha * r * (p[best,c]^t - p[i,c]^t)
+```
 
-Bảng dưới đây chép lại kết quả đã ghi trong tài liệu thí nghiệm của repository, với 40 cá thể, hai elites, ngân sách 2.000 evaluations và năm seed. Đơn vị distance là đơn vị chi phí của ma trận. Độ lệch chuẩn là sample standard deviation giữa các lần chạy.
+Matriarch cập nhật theo tâm clan, còn cá thể được separation được tạo lại trong miền tìm kiếm. Trong các công thức này, `alpha` và `beta` điều khiển mức ảnh hưởng; `r` là số ngẫu nhiên trong `[0,1)`.
+
+Tutorial về swarm intelligence trình bày các công thức EHO liên tục ở trang in 150–154. Những công thức đó dùng vector số thực. Vì route TSP là hoán vị, không thể cộng/trừ trực tiếp các route hoặc lấy trung bình số học mà vẫn giữ được nghiệm hợp lệ. Dự án do đó dùng D-EHO, một phép thích nghi rời rạc cho không gian hoán vị, không tuyên bố tương đương đại số với EHO liên tục.
+
+### 3.1.2. Các thành phần chính
+
+- **Clan:** nhóm các route cùng tiến hóa.
+- **Matriarch:** route có tổng chi phí thấp nhất trong clan.
+- **Tâm clan:** route đại diện cho clan; trong D-EHO là Hamming medoid.
+- **Clan updating:** cập nhật matriarch và đưa các voi thường về phía matriarch.
+- **Separating:** thay các route tệ nhất bằng route ngẫu nhiên hợp lệ.
+- **Elitism:** lưu nghiệm tốt nhất theo clan và toàn cục qua các thế hệ.
+
+## 3.2. Áp dụng EHO cho bài toán TSP
+
+### 3.2.1. Biểu diễn nghiệm và hàm mục tiêu
+
+Mỗi cá thể là route `pi = (0, pi_1, ..., pi_(n-1))`, trong đó phần sau city `0` là hoán vị của các thành phố còn lại. Độ dài chu trình tính cả cạnh quay về điểm đầu:
+
+```text
+L(pi) = sum(i=0..n-2) D[pi_i, pi_(i+1)] + D[pi_(n-1), pi_0]
+```
+
+Shared objective kiểm tra route hợp lệ rồi tính `L(pi)`. Dữ liệu hiện tại là symmetric TSP với ma trận hữu hạn, không âm, đối xứng và đường chéo bằng 0.
+
+### 3.2.2. Phân chia quần thể thành Clan
+
+Quần thể gồm `N_c` clan, mỗi clan có `m` route. `Clan(members, costs)` giữ route và chi phí khớp theo cùng index. Matriarch được chọn bằng chi phí tour nhỏ nhất. Mọi clan được tạo thành đối tượng bất biến để route và cost không lệch nhau khi cập nhật.
+
+### 3.2.3. Tâm clan và cập nhật Matriarch
+
+Do không có trung bình tự nhiên của các hoán vị, tâm clan được chọn là route trong clan có tổng Hamming distance nhỏ nhất tới các route khác:
+
+```text
+d_H(pi, sigma) = sum(j=1..n-1) [pi_j != sigma_j]
+center_c = argmin(pi in clan_c) sum(sigma in clan_c) d_H(pi, sigma)
+```
+
+Nếu hòa, chọn route có tour cost thấp hơn rồi chọn index nhỏ hơn. Matriarch được dịch về phía medoid bằng guided-swap với `beta`.
+
+### 3.2.4. Di chuyển voi thường (Clan Updating Operator)
+
+Với route nguồn `pi`, route đích `target` và strength `s` (`alpha` hoặc `beta`), D-EHO tìm các vị trí sai khác ở index từ 1 trở đi. Số swap tối đa được lấy theo:
+
+```text
+k = floor(s * r * |diff|),   r ~ U[0,1)
+```
+
+Toán tử xáo thứ tự các vị trí sai khác rồi đưa thành phố đích về vị trí tương ứng bằng swap. `s=0` giữ nguyên route; `s=1` trả route đích; các giá trị giữa hai biên chỉ thực hiện một phần các swap. Route đầu vào không bị sửa và city `0` luôn giữ ở đầu.
+
+### 3.2.5. Tách đàn (Separating Operator)
+
+Solver chọn `separation_count_per_clan` route có chi phí cao nhất trong clan cha, bảo vệ matriarch và thay các route được chọn bằng permutation ngẫu nhiên hợp lệ. Vai trò separation được xác định từ clan cha và giữ cố định trong generation đó.
+
+### 3.2.6. Bảo tồn nghiệm tốt nhất (Elitism)
+
+Solver khởi tạo archive tốt nhất cho từng clan và global best từ quần thể ban đầu. Mỗi candidate được đánh giá đúng một lần; nếu tốt hơn, route cập nhật archive tương ứng. Sau generation hoàn chỉnh, nếu archive clan không còn trong clan thì solver thay member tệ nhất bằng route lưu trữ, đồng thời giữ matriarch hiện tại. Nếu dừng giữa generation, population chưa hoàn chỉnh không được commit nhưng global best vẫn giữ nghiệm tốt nhất đã đánh giá.
+
+## 3.3. Quy trình hoạt động của D-EHO
+
+```text
+Khởi tạo N_c clan, mỗi clan m route hợp lệ; tính objective cho quần thể
+Khởi tạo clan archive và global best
+Lặp đến khi đạt giới hạn thế hệ/evaluations/thời gian hoặc bị hủy:
+    Với mỗi clan:
+        Chọn matriarch và tính Hamming medoid từ clan hiện tại
+        Chọn các index separation, không chọn matriarch
+        Với từng voi:
+            matriarch -> guided-swap về medoid theo beta
+            voi separation -> route permutation ngẫu nhiên
+            voi thường -> guided-swap về matriarch theo alpha
+            tính objective một lần; cập nhật archive clan/global
+        nếu đủ member: khôi phục archive clan khi cần
+    nếu tất cả clan hoàn chỉnh: commit population mới
+    nếu dừng giữa generation: không commit population dở dang
+Trả global best và RunResult
+```
+
+### Cập nhật một voi trong `solver.py`
+
+```python
+if index == leader_index:
+    candidate = update_matriarch(route, center, config.beta, rng)
+elif index in separated:
+    candidate = separated_members[index]
+else:
+    candidate = move_toward_best(route, leader, config.alpha, rng)
+
+cost = problem.route_length(candidate)
+evaluations += 1
+if cost < best_distance:
+    best_route, best_distance = candidate, cost
+```
+
+## 3.4. Triển khai và kiểm tra D-EHO
+
+### 3.4.1. Module
+
+`clans.py` lưu clan và tính medoid; `discrete_ops.py` triển khai Hamming distance và guided-swap; `separation.py` tạo route separation; `solver.py` điều phối khởi tạo, vòng lặp, stop, archive và `RunResult`. EHO dùng `EHOConfig` ở `domain/models.py` và `TSPProblem.route_length` ở shared domain. CLI, GUI và benchmark đều gọi cùng public solver.
+
+### 3.4.2. Tham số và điều kiện
+
+- `clan_count >= 2`; `elephants_per_clan >= 3`.
+- `iterations` và `max_iterations` là số nguyên dương; số thế hệ tối đa lấy giá trị nhỏ hơn.
+- `alpha, beta ∈ [0,1]`; mặc định lần lượt là `0.7` và `0.3`.
+- `0 <= separation_count_per_clan < elephants_per_clan`; matriarch không bị separation.
+- Baseline yêu cầu `initialization_method='random'` và `preserve_global_best=True`.
+- `max_evaluations` nếu có phải đủ đánh giá quần thể ban đầu; time limit nếu có phải dương; seed không âm.
+- Bài toán hiện tại là symmetric TSP có ít nhất 3 thành phố.
+
+### 3.4.3. Điều kiện dừng và số lần đánh giá
+
+Solver dừng khi đạt giới hạn thế hệ, evaluation budget, time limit hoặc nhận yêu cầu hủy. Nếu chạy đủ `G` thế hệ, số lần đánh giá là `N_c * m * (G + 1)`: một quần thể ban đầu cộng `G` thế hệ. Route trùng vẫn được tính nếu objective được gọi. Khi dừng giữa generation, chỉ trả nghiệm tốt nhất đã thấy; quần thể dở dang không được commit.
+
+### 3.4.4. Benchmark EHO
+
+Benchmark được chạy lại từ commit `4cb9947` trên Python 3.11.9, Windows 10: 4 clan × 20 voi, `alpha=0.7`, `beta=0.3`, một route separation mỗi clan, ngân sách 6.000 objective evaluations/run, năm seed `[11, 23, 37, 53, 71]`. Cả 35/35 lượt đều hợp lệ. Bảng ghi trung bình, độ lệch chuẩn mẫu, min–max và thời gian trung bình; thời gian phụ thuộc môi trường.
+
+| Thành phố | Distance trung bình | Độ lệch chuẩn mẫu | Min–max | Evaluations/run | Runtime TB (s) |
+|---:|---:|---:|---:|---:|---:|
+| 3 | 6.0 | 0.00 | 6–6 | 6000 | 0.2084 |
+| 4 | 189.0 | 0.00 | 189–189 | 6000 | 0.2190 |
+| 6 | 1248.0 | 0.00 | 1248–1248 | 6000 | 0.2461 |
+| 15 | 1668.8 | 90.97 | 1539–1796 | 6000 | 0.3340 |
+| 26 | 1672.8 | 114.35 | 1509–1825 | 6000 | 0.4753 |
+| 42 | 2015.2 | 55.00 | 1961–2107 | 6000 | 0.6211 |
+| 48 | 103202.6 | 2035.52 | 100054–104711 | 6000 | 0.6793 |
+
+Không có known optimum được xác minh cho các dataset này trong registry, nên bảng là kết quả quan sát, không phải khoảng cách tới optimum.
+
+## 3.5. Nhận xét và giới hạn D-EHO
+
+**Ưu điểm.** Các toán tử hoạt động trực tiếp trên route hoán vị và giữ nghiệm hợp lệ mà không cần repair. Clan archive và global best bảo tồn nghiệm tốt đã tìm thấy. Seed và evaluation budget giúp lặp lại, giới hạn các lần chạy.
+
+**Hạn chế.** Guided-swap, Hamming medoid và separation ngẫu nhiên là phép thích nghi cho TSP, không phải phép biến đổi đại số tương đương EHO liên tục. Hamming medoid đo khác biệt theo vị trí thành phố chứ không theo cạnh của chu trình. EHO là heuristic nên không đảm bảo optimum toàn cục. Kết quả hiện tại dùng một cấu hình và năm seed; chưa đủ để suy rộng thứ hạng thuật toán.
+
+**Phạm vi áp dụng.** Implementation phù hợp với symmetric TSP có ma trận hữu hạn, không âm, đối xứng, đường chéo bằng 0 và ít nhất ba thành phố. Mở rộng sang TSP bất đối xứng hoặc bài lớn cần điều chỉnh toán tử và kiểm tra bằng thí nghiệm mới.
+
+# CHƯƠNG 4. CÁC KẾT QUẢ THỰC NGHIỆM
+
+## 4.1. Thiết kế thí nghiệm
+
+Repository có bảy ma trận gồm 3, 4, 6, 15, 26, 42 và 48 thành phố. Notebook khảo sát riêng các toán tử GA, độ phân tán qua nhiều seed, khởi tạo, adaptive mutation và 2-opt. Benchmark mới chạy GA và D-EHO độc lập trên cùng bảy ma trận, cùng năm seed `[11, 23, 37, 53, 71]` và giới hạn 6.000 objective evaluations cho mỗi lượt. Mỗi thuật toán có 35 lượt hợp lệ.
+
+Các bảng thí nghiệm notebook giữ cấu hình và mục tiêu riêng của từng phép thử; không gộp kết quả chạy khác budget thành một so sánh trực tiếp. Các bảng benchmark ở Mục 4.5 mới là phép so sánh GA–D-EHO có cùng bộ dữ liệu, seed và ngân sách đánh giá. Runtime chỉ mô tả môi trường lần chạy, không phải bảo đảm tốc độ trên máy khác. Không có known optimum đã xác minh cho các ma trận này, vì vậy không kết luận optimum hoặc relative gap.
+
+## 4.2. Kết quả so sánh operator trên bài 15 thành phố
+
+Bảng chép lại thí nghiệm GA trong notebook với population 40, hai elites, tối đa 2.000 evaluations và năm seed. Độ lệch chuẩn là sample standard deviation.
 
 | Biến thể | Distance trung bình | Trung vị | Độ lệch chuẩn mẫu |
 |---|---:|---:|---:|
@@ -216,11 +369,11 @@ Bảng dưới đây chép lại kết quả đã ghi trong tài liệu thí ngh
 | Insertion mutation | 1319.8 | 1287 | 68.16 |
 | Scramble mutation | 1473.0 | 1391 | 152.78 |
 
-Trong cấu hình cụ thể này, các biến thể được thử không tốt hơn trung bình của cấu hình mặc định. Điều đó không chứng minh chúng luôn kém: kết luận chỉ áp dụng cho ma trận, seed, budget và tham số đã chọn. Một thử nghiệm nhỏ với năm seed cũng chưa đủ để khẳng định thứ hạng ổn định trên mọi TSP.
+Trong cấu hình và mẫu seed này, GA mặc định có mean thấp nhất trong các biến thể được thử. Năm seed chưa đủ để kết luận thứ hạng sẽ giữ nguyên trên dữ liệu hoặc cấu hình khác.
 
-## 3.3. Độ phân tán kết quả theo kích thước bài toán
+## 4.3. Độ phân tán kết quả trong notebook GA
 
-Kết quả được lưu trong notebook phân bố sử dụng năm seed cho từng dataset. “Best observed” là route tốt nhất trong số lần chạy mẫu; nó không phải optimum đã chứng minh cho các bài lớn.
+Bảng sau tóm tắt thí nghiệm notebook đã lưu, dùng năm seed cho từng dataset. “Best observed” là kết quả tốt nhất trong mẫu, không phải optimum đã chứng minh.
 
 | Số thành phố | Min | Mean | Median | Max | Độ lệch chuẩn mẫu | Tỷ lệ đạt min quan sát |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -231,74 +384,66 @@ Kết quả được lưu trong notebook phân bố sử dụng năm seed cho t�
 | 42 | 1102 | 1151.6 | 1133 | 1211 | 49.75 | 20% |
 | 48 | 51215 | 55404.6 | 55339 | 59638 | 3031.79 | 20% |
 
-Ở hai bài nhỏ được ghi lại, kết quả mẫu giống nhau giữa các seed. Notebook còn kiểm tra độc lập route bằng cách liệt kê các hoán vị phần tail cho bài 3 và 6 thành phố; đây là kiểm chứng nhỏ cho công thức chi phí, không phải solver thứ ba dùng trong ứng dụng. Khi số thành phố tăng, khoảng cách giữa các lần chạy cũng tăng rõ ở một số dataset. Tỷ lệ đạt min quan sát chỉ cho biết số run chạm vào kết quả tốt nhất của chính mẫu hiện tại, không thể diễn giải là xác suất tìm optimum toàn cục.
+Các bài nhỏ cho kết quả ổn định trong mẫu. Ở các bài lớn hơn, kết quả thay đổi theo seed. Tỷ lệ đạt min chỉ cho biết số lượt chạm min của mẫu hiện tại. Thí nghiệm liệt kê hoán vị trên bài nhỏ để kiểm tra độc lập giá trị route; phép liệt kê này không phải solver của ứng dụng.
 
-## 3.4. Khởi tạo, adaptive mutation và 2-opt
+## 4.4. Khởi tạo, adaptive mutation và 2-opt
 
-Trong thí nghiệm đã ghi cho các bài 15, 26, 42 và 48 thành phố, cấu hình mixed initialization và nearest-neighbor cho kết quả trung bình thấp hơn control trên các mẫu đó. Chẳng hạn tại 48 thành phố, control đạt mean 55.404,6, trong khi mixed đạt 37.222,2 và nearest-neighbor đạt 36.559,0. Đây là bằng chứng thực nghiệm có phạm vi hẹp, không phải bảo đảm hai phương pháp khởi tạo này sẽ tốt hơn trên dữ liệu khác.
+Trong thí nghiệm notebook trên các bài 15, 26, 42 và 48 thành phố, mixed initialization và nearest-neighbor có mean thấp hơn control ở các mẫu đã lưu. Ví dụ trên bài 48, control mean là 55.404,6; mixed là 37.222,2; nearest-neighbor là 36.559,0. Đây là quan sát theo preset và seed của notebook, không phải bảo đảm tổng quát.
 
-2-opt cho kết quả trung bình kém control ở cả bốn bài trong preset được ghi nhận. Trên bài 48 thành phố, 2-opt tiêu thụ trung bình 3.163,4 trên 4.000 lượt đánh giá cho các phép thử local search và chỉ commit khoảng 20,6 thế hệ, trong khi control commit khoảng 104 thế hệ. Điều này giải thích một đánh đổi quan trọng: các probe local search cũng dùng ngân sách objective, nên chúng làm giảm lượt tạo thế hệ mới. Không nên kết luận 2-opt tốt hơn chỉ vì từng move được chấp nhận là move cải thiện route hiện tại.
+2-opt có mean kém control trong preset được ghi nhận. Trên bài 48, phép thử local search dùng trung bình 3.163,4/4.000 evaluations và chỉ commit khoảng 20,6 thế hệ, so với khoảng 104 thế hệ của control. Ngân sách cho các probe local search làm giảm ngân sách tạo thế hệ. Adaptive mutation cũng chỉ được đánh giá trong các preset và seed đã lưu, và không bật mặc định.
 
-Adaptive mutation được triển khai như lựa chọn cấu hình, nhưng các kết quả trong notebook chỉ là quan sát theo seed, preset và evaluation budget đã chỉ định. Tùy chọn này không bật mặc định. GA vẫn giữ cấu hình mặc định random initialization, tournament selection, OX, inversion mutation và elitism hai cá thể để có baseline dễ so sánh.
+## 4.5. Benchmark GA và D-EHO trên bảy ma trận
 
-## 3.5. Benchmark trên bảy ma trận
+Mỗi thuật toán được chạy năm seed trên mỗi dataset, tối đa 6.000 objective evaluations/run. Cả GA và D-EHO đều có 35/35 lượt hợp lệ. Runtime trung bình được đo trên cùng máy trong lần benchmark này.
 
-> Bảng dưới đây là số liệu thực nghiệm đã được ghi trong `docs/experiments.md` từ một batch benchmark 35 lần chạy. Nó không phải số đo vừa được chạy lại trong lần kiểm tra tài liệu này. Mỗi lần chạy dùng 6.000 evaluations và năm seed; thời gian là runtime trung bình mỗi lần chạy trên môi trường được ghi trong tài liệu nghiệm thu trước.
+| Thành phố | GA mean | GA SD | GA runtime (s) | D-EHO mean | D-EHO SD | D-EHO runtime (s) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 6 | 0 | 0.0354 | 6 | 0 | 0.2084 |
+| 4 | 189 | 0 | 0.0376 | 189 | 0 | 0.2190 |
+| 6 | 1248 | 0 | 0.0401 | 1248 | 0 | 0.2461 |
+| 15 | 1200.2 | 13.86 | 0.0510 | 1668.8 | 90.97 | 0.3340 |
+| 26 | 1056.4 | 72.84 | 0.0661 | 1672.8 | 114.35 | 0.4753 |
+| 42 | 1166.2 | 26.28 | 0.0862 | 2015.2 | 55.00 | 0.6211 |
+| 48 | 54194.4 | 3861.50 | 0.0941 | 103202.6 | 2035.52 | 0.6793 |
 
-| Số thành phố | Distance trung bình | Độ lệch chuẩn mẫu | Runtime trung bình (giây) |
-|---:|---:|---:|---:|
-| 3 | 6 | 0 | 0.043994 |
-| 4 | 189 | 0 | 0.047088 |
-| 6 | 1248 | 0 | 0.050767 |
-| 15 | 1200.2 | 13.86 | 0.064215 |
-| 26 | 1056.4 | 72.84 | 0.081771 |
-| 42 | 1166.2 | 26.28 | 0.101169 |
-| 48 | 54194.4 | 3861.50 | 0.115391 |
+Trong cấu hình thử này, GA có mean thấp hơn D-EHO ở các bài 15, 26, 42 và 48 thành phố; ba trường hợp nhỏ có cùng mean. Đây chỉ là kết quả của một bộ cấu hình, năm seed và ngân sách đã nêu. D-EHO có runtime cao hơn trong lần đo này; không nên khái quát sang phần cứng khác. Chi phí của các ma trận có thang khác nhau, nên chỉ so sánh GA với D-EHO trong cùng một hàng, không so mean giữa các dataset.
 
-Các ma trận có thang chi phí khác nhau, vì vậy không được so sánh trực tiếp mean distance của dataset này với dataset khác như thể chúng có cùng đơn vị hoặc cùng độ khó. Dữ liệu hiện chưa có known optimum được xác minh trong registry, nên relative gap để trống và không thể kết luận khoảng cách tới nghiệm tối ưu cho các bài lớn.
+## 4.6. Kiểm tra mã nguồn và khả năng tái lập
 
-## 3.6. Kiểm tra source và smoke test ở lần rà soát hiện tại
+Lần rà soát được thực hiện trên commit `4cb9947` bằng Python 3.11.9 trên Windows 10.
 
-Các kết quả dưới đây được chạy trực tiếp trên working tree hiện tại bằng interpreter `.venv` của repository. Trong terminal Windows của phiên kiểm tra, Python dùng encoding `cp1258`, khiến ký tự tiếng Việt và mũi tên trong output CLI không ghi được. Sau khi đặt `PYTHONIOENCODING=utf-8`, các lệnh chạy thành công. Đây là vấn đề encoding của console ở môi trường cụ thể; nó không làm thay đổi objective hay kết quả solver, nhưng người dùng Windows có thể cần đặt UTF-8 nếu gặp lỗi tương tự.
+- `python -m compileall -q src`: thành công.
+- Benchmark GA và D-EHO: mỗi thuật toán hoàn tất 35/35 lượt, mỗi lượt tối đa 6.000 evaluations.
+- Repository có kiểm thử trong `tests/`, nhưng `pytest` chưa chạy được vì môi trường `.venv` hiện thiếu module `pytest`. Vì vậy không ghi nhận kết quả pass/fail cho test suite.
+- Các giá trị benchmark là best-of-run theo ngân sách, không chứng minh nghiệm tối ưu toàn cục.
 
-- `python -m compileall -q src`: pass.
-- `python -m ga_eho_tsp.cli validate` cho cả bảy file: pass; các ma trận đều được xác nhận vuông, đối xứng, diagonal 0 và finite.
-- Chạy `solve` trên `15Cities-1194.txt` với seed 42, population 20, 10 generations và 10 max iterations: distance 1687, 200 evaluations, 10 iterations, stopping reason `MAX_ITERATIONS`; elapsed được lệnh CLI ghi là 0.002457 giây trong lần chạy này.
-- Gọi API solver hai lần cùng cấu hình trên: route, distance, evaluation count và dãy best-so-far bằng nhau; kiểm tra lại route length bằng shared objective cũng pass.
-- Gọi CLI với `--algorithm eho`: bị từ chối với thông báo “EHO planned / not implemented”, exit code 2. Điều này xác nhận CLI không giả lập kết quả EHO.
-- `python -m pytest -q`: không có test nào được tìm thấy trong repository hiện tại (`no tests ran`). Vì thế không thể báo cáo regression suite pytest pass trong working tree này.
+# CHƯƠNG 5. KẾT LUẬN
 
-Smoke test 15 thành phố dùng cấu hình nhỏ để xác minh luồng chạy, không phải benchmark chất lượng. Distance 1687 không được coi là optimum; đây là kết quả của seed và cấu hình nhỏ vừa chạy. Các bảng ở phần trước là số liệu từ báo cáo thực nghiệm đã có sẵn, được dẫn nguồn rõ ràng thay vì giả vờ chạy lại ở đây.
+## 5.1. Kết quả đạt được
 
-# CHƯƠNG 4. KẾT LUẬN
+Repository hiện triển khai hai solver độc lập cho symmetric TSP: Genetic Algorithm và Discrete Elephant Herding Optimization. Chúng dùng chung biểu diễn route permutation, kiểm tra đầu vào và hàm mục tiêu tính tổng chi phí chu trình; mỗi thuật toán có vòng lặp và tham số riêng. CLI và GUI cho phép chọn GA hoặc EHO cho từng lượt chạy, nhưng chưa ghép hai thuật toán thành một solver lai.
 
-## 4.1. Kết quả đạt được
+GA cung cấp selection, crossover, mutation, nhiều cách khởi tạo, elitism và các điều kiện dừng. D-EHO có clan, matriarch, Hamming medoid, guided-swap, separation, archive nghiệm tốt và các giới hạn chạy. Benchmark cùng budget cho thấy GA có mean thấp hơn trên bốn bài lớn trong mẫu này; điều đó chưa đủ để tuyên bố GA luôn tốt hơn D-EHO.
 
-Source hiện tại có một GA solver thật cho symmetric TSP. GA dùng route permutation 0-based khóa city 0, shared objective, RNG riêng theo seed, global-best tracking, history, evaluation count và các điều kiện dừng có thể cấu hình. Pipeline mặc định gồm random initialization, tournament selection, OX crossover, inversion mutation và elitism. Các hàm operator được chia module để có thể đọc và thay đổi độc lập.
+## 5.2. Hạn chế và hướng phát triển
 
-Ngoài cấu hình mặc định, source đã triển khai rank và roulette selection, PMX, swap/insertion/scramble mutation, nearest-neighbor/mixed initialization, stagnation stopping, adaptive mutation, cancellation/progress callback và bounded 2-opt. CLI có validate, solve GA và benchmark nhiều seed; GUI cũng đăng ký solver GA hiện có. Cả bảy ma trận bundled đã qua lệnh validate trong lần kiểm tra này.
+1. **Kiểm thử tự động:** test source có trong repository, nhưng cần cài `pytest` vào môi trường để chạy lại suite và báo cáo kết quả.
+2. **Độ tin cậy thống kê:** benchmark hiện dùng năm seed và một cấu hình cho mỗi solver. Nên tăng số seed, thử nhiều cấu hình và báo cáo phân bố.
+3. **Nghiệm tham chiếu:** các tên file gợi ý chi phí nhưng không thay thế known optimum có nguồn kiểm chứng. Chỉ báo cáo optimality gap khi có reference đáng tin cậy.
+4. **Phạm vi TSP:** dữ liệu hiện dùng symmetric TSP. TSP bất đối xứng cần kiểm tra hợp đồng dữ liệu và đánh giá lại toán tử.
+5. **Giới hạn D-EHO:** Hamming medoid đo khác biệt theo vị trí, không theo cạnh chu trình; guided-swap và separation là phép thích nghi rời rạc chứ không tương đương đại số với công thức EHO liên tục. EHO vẫn là heuristic, không bảo đảm optimum toàn cục.
+6. **Chi phí tính toán:** D-EHO có runtime cao hơn GA trong batch hiện tại; cần profiling và thử nghiệm thêm trước khi chọn cấu hình triển khai.
 
-Về phạm vi người dùng hỏi, có thể xác nhận **phần thuật toán GA cho TSP đã được triển khai ở source**, còn **EHO chưa được triển khai**. Tuy nhiên, không nên diễn đạt thành “toàn bộ repository đã qua nghiệm thu tự động”: working tree hiện không chứa regression test suite, và `pytest -q` không chạy được test nào. Tài liệu hiện có ghi lại các lần kiểm thử trước đó nhưng bằng chứng lịch sử không thay thế được việc có thể chạy lại bộ test trong repo.
-
-## 4.2. Hạn chế và hướng phát triển
-
-1. **Khôi phục regression suite thường trực.** Ưu tiên cao nhất là đưa lại tests vào repository để các thay đổi sau này có thể được kiểm tra bằng `pytest -q`. Không nên dựa riêng vào các số liệu test lịch sử đã lưu trong tài liệu.
-2. **Kiểm tra encoding CLI trên Windows.** Trong môi trường terminal của lần rà soát này, CLI cần UTF-8 output encoding mới hiển thị thông điệp tiếng Việt và ký tự mũi tên. Cần quyết định có nên làm CLI tự cấu hình encoding hay chỉ chuẩn hóa hướng dẫn chạy.
-3. **Mở rộng thực nghiệm có kiểm soát.** Tăng số seed, báo cáo phân bố, tách rõ fixed-generation với fixed-evaluation comparisons và chỉ dùng optimum/gap khi có nguồn xác minh.
-4. **Xác minh nguồn dữ liệu và giấy phép.** Dataset hiện có nguồn gốc tham chiếu trong tài liệu attribution, nhưng giấy phép và optimum cho các ma trận vẫn chưa xác nhận đầy đủ.
-5. **Chưa có TSPLIB loader, restart hoặc 2-opt delta engine.** Đây là các chức năng chưa nằm trong implementation hiện tại; không được mô tả như đã hoàn thành.
-6. **EHO là phần việc kế tiếp của nhóm.** Solver EHO không có trong repository hiện tại. Việc triển khai cần tuân thủ shared contract, dùng cùng TSP objective và được kiểm tra độc lập; phần GA này không cung cấp kết quả EHO giả.
-
-Do số lần chạy và số seed trong các thí nghiệm còn hạn chế, kết quả không chứng minh GA luôn tìm nghiệm tối ưu hoặc một operator luôn tốt hơn các operator còn lại. Kết luận phù hợp nhất là repository hiện có một GA solver triển khai được và tái lập được trong các smoke test đã chạy; mức tin cậy lâu dài còn phụ thuộc vào việc khôi phục bộ test tự động và mở rộng kiểm chứng.
+Tóm lại, mã nguồn đáp ứng phạm vi đề tài ở mức có hai thuật toán TSP chạy được và benchmark được. Kết luận về thuật toán nào ưu việt hơn cần thêm thử nghiệm có kiểm soát và known optimum cho các bộ dữ liệu phù hợp.
 
 # TÀI LIỆU THAM KHẢO
 
 1. Holland, J. H. *Adaptation in Natural and Artificial Systems*. University of Michigan Press, 1975. Tài liệu nền tảng về cơ chế thích nghi và giải thuật di truyền.
 2. Goldberg, D. E. *Genetic Algorithms in Search, Optimization, and Machine Learning*. Addison-Wesley, 1989. Tài liệu nhập môn về biểu diễn, selection, crossover và mutation trong GA.
 3. Applegate, D. L., Bixby, R. E., Chvátal, V., và Cook, W. J. *The Traveling Salesman Problem: A Computational Study*. Princeton University Press, 2006. Tài liệu chuyên sâu về mô hình và phương pháp giải TSP.
-4. Slowik, A. (Ed.). *Swarm Intelligence Algorithms: A Tutorial*. CRC Press, 2020. Tài liệu seminar được liệt kê trong README của repository; nội dung GA ở đây không dùng nó để khẳng định đã triển khai EHO.
+4. Slowik, A. (Ed.). *Swarm Intelligence Algorithms: A Tutorial*. CRC Press, 2020, chương Elephant Herding Optimization, tr. in 150–161. Dùng làm nguồn mô tả thuật toán EHO nền; các toán tử rời rạc cho TSP được đối chiếu riêng với implementation của dự án.
 5. Nhóm dự án, `docs/algorithm_ga.md`, `docs/experiments.md`, `docs/architecture.md`, `docs/source_attribution.md` và source trong `src/ga_eho_tsp/`. Các tài liệu này mô tả implementation, kết quả đã ghi nhận, hợp đồng dữ liệu và giới hạn hiện tại của repository.
-6. File `AI FINAL PROJECT.pdf` do người dùng cung cấp. Tài liệu được dùng làm khung chương mục; mục lục/nội dung PDF còn ghi Tic Tac Toe và không phải mô tả implementation hiện tại của repository.
+6. File `AI FINAL PROJECT (1).docx` do người dùng cung cấp. Tài liệu được dùng để đối chiếu nội dung báo cáo hiện tại; nội dung trong báo cáo này được cập nhật theo source code của repository.
 
 # PHỤ LỤC A. CÀI ĐẶT VÀ SỬ DỤNG GA
 
@@ -361,10 +506,33 @@ python -m ga_eho_tsp.cli benchmark --config examples/ga_benchmark.json
 
 Config ví dụ chạy bảy ma trận với năm seed và tối đa 6.000 evaluations mỗi run. Summary, CSV và JSON được ghi vào `outputs/benchmarks/ga-example/`. Dữ liệu output có thể được thay thế khi chạy lại cùng cấu hình; cần đổi `output_dir` nếu muốn giữ các batch khác nhau.
 
-Repository hiện không có regression suite `tests/`. Do đó, lệnh dưới đây trong working tree hiện tại sẽ báo không có test chạy được cho tới khi suite được khôi phục:
+Repository có test trong `tests/`. Môi trường `.venv` của lần rà soát thiếu `pytest`; cài dependency này rồi mới chạy được suite:
 
 ```powershell
 python -m pytest -q
 ```
 
-Các kiểm tra thực hiện trong lần rà soát hiện tại được nêu ở Mục 3.6, còn số liệu benchmark có sẵn được mô tả ở Mục 3.5. Hai nhóm bằng chứng này không được đánh đồng.
+Kết quả kiểm tra source và benchmark hiện tại được tóm tắt ở Mục 4.5–4.6.
+
+
+# PHỤ LỤC B. CÀI ĐẶT VÀ SỬ DỤNG D-EHO
+
+## B.1. Chạy EHO trên một dataset
+
+```powershell
+python -m ga_eho_tsp.cli solve `
+  --algorithm eho `
+  --dataset data/15Cities-1194.txt `
+  --seed 42 `
+  --max-evaluations 6000
+```
+
+Tham số chính gồm `--clan-count`, `--elephants-per-clan`, `--alpha`, `--beta` và `--separation-count`. Có thể thêm `--json` để lưu kết quả.
+
+## B.2. Chạy benchmark EHO
+
+```powershell
+python -m ga_eho_tsp.cli benchmark --config examples/eho_benchmark.json
+```
+
+Cấu hình mẫu chạy bảy ma trận với năm seed và tối đa 6.000 evaluations mỗi lượt. Benchmark ghi summary, CSV và JSON trong thư mục output đã cấu hình. Đổi `output_dir` nếu cần giữ nhiều batch benchmark.
